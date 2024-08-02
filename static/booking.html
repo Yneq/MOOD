@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Booking</title>
+  <link rel="stylesheet" href="static/styles.css">
+</head>
+<body>
+  <div class="navbar">
+    <div class="content">
+          <div class="title">台北一日遊</div>
+          <div class="buttons">
+              <button class="booking-btn" id="bookingBtn">預定行程</button>
+              <button class="booking-btn" id="loginBtn">登入/註冊</button>
+          </div>
+      </div>
+  </div>
+  
+  <div class="modal" id="modal-login">
+    <div class="member-top-bar"></div>
+    <div class="modal-content">
+        <span class="close-btn"></span>
+            <div class="log-in">登入會員帳號</div>
+            <input type="email" placeholder="輸入電子信箱" class="input-member" name="login-email">
+            <input type="password" placeholder="輸入密碼" class="input-member" name="login-password">
+            <button class="register-btn" id="login-register-btn">登入帳戶</button>
+            <div class="fail-email-password">電子郵件或密碼錯誤</div>
+            <div class="success-login">登入成功</div>
+        <div class="question">還沒有帳戶？<a href="#" class="question" id="q-login">點此註冊</a></div>  
+    </div>
+</div>
+
+<div class="overlay"></div>
+
+<div class="modal" id="modal-signup">
+    <div class="member-top-bar"></div>
+    <div class="modal-content">
+        <span class="close-btn"></span>
+            <div class="log-in">註冊會員帳號</div>
+            <input type="text" placeholder="輸入姓名" class="input-member" name="signup-name">
+            <input type="email" placeholder="輸入電子郵件" class="input-member" name="signup-email">
+            <input type="password" placeholder="輸入密碼" class="input-member" name="signup-password">
+            <button class="register-btn" id="signup-register-btn">註冊新帳戶</button>
+            <div class="fail-email-registed">Email 已經註冊帳戶</div>
+            <div class="fail-registed">註冊失敗，請檢查email password</div>
+            <div class="success-signup">註冊成功，請登入系統</div>
+        <div class="question">已經有帳戶了？<a href="#" class="question" id="q-signup">點此登入</a></div>  
+    </div>
+</div>
+  
+  <div class="small-container">
+  <div class="booking-container">
+  <div class="greeting-booking">您好，<span class="booking-name"></span>，待預定的行程如下：</div>
+  <div class="greeting-no-booking">目前沒有任何待預訂的行程</div>
+
+  <div class="not-booking">
+  <div class="booking-picture-content">
+    <div class="booking-picture"></div>
+    <div class="booking-details">
+      <span class="delete-btn"></span>
+      <div class="booking-attraction-name">台北一日遊：<span class="bookingAttractionName"></span></div>
+      <div class="details">
+        <div>日期：<span class="bookingDate"></span></div>
+        <div>時間：<span class="bookingTime"></span></div>
+        <div>費用：<span class="bookingPrice"></span> 元</div>
+        <div>地點：<span class="bookingLocation"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="horizontal-line-container">
+    <div class="horizontal-line"></div>
+  </div>
+  <div class="booking-container">
+    <div class="contact-info">您的聯絡資訊</div>
+      <div class="input-group">聯絡姓名：<input type="name" placeholder="name" class="input-name"></div>
+      <div class="input-group">連絡信箱：<input type="email" placeholder="輸入電子郵件" class="input-mail"></div>
+      <div class="input-group">手機號碼：<input type="number" placeholder="輸入手機號碼" class="input-number"></div>
+    <div class="notice">請保持手機暢通，準時到達，導覽人員將用手機與您聯繫，務必留下正確的聯絡方式。</div>
+  </div>  
+  <div class="horizontal-line-container">
+    <div class="horizontal-line"></div>
+  </div>
+  <div class="booking-container">
+    <div class="creditcard-info">信用卡付款資訊</div>
+    <form id="payment-form-creditcard">
+    <div class="input-group">
+      卡片號碼：<div class="credit-card-input tpfield" id="card-number"></div>
+    </div>
+    <div class="input-group">
+      過期時間：<div class="input-date tpfield" id="card-expiration-date"></div>
+    </div>
+    <div class="input-group">
+      驗證密碼：<div class="input-ccv tpfield" id="card-ccv"></div>  
+      </div>
+  </div>
+  <div class="horizontal-line-container">
+    <div class="horizontal-line"></div>
+  </div>
+  <div class="booking-container" id="total-price">
+    <div>總價：新台幣 <span class="bookingPrice"></span> 元</div>
+    <button class="confirm-pay" id="pay-button">確認訂購並付款</button>
+  </div>
+</div>
+</form>
+</div>
+</div>
+
+<div class="loader"></div>
+<div class="copyright-bar">COPYRIGHT © 2021 台北一日遊</div>
+
+  <script src="https://js.tappaysdk.com/tpdirect/v5.13.1"></script>
+  <script>TPDirect.setupSDK(151758, 'app_9xqujZF27RJkyFs78NC2tI718lLlzimlCSDcRKsIkcaRt2lYlrw4KlnkUqFG', 'sandbox')</script>
+  <script src="static/scripts.js"></script>
+
+</body>
+</html>

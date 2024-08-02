@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thank You</title>
+  <link rel="stylesheet" href="static/styles.css">
+</head>
+<body>
+<div class="navbar">
+  <div class="content">
+        <div class="title">台北一日遊</div>
+        <div class="buttons">
+            <button class="booking-btn" id="bookingBtn">預定行程</button>
+            <button class="booking-btn" id="loginBtn">登入/註冊</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="modal-login">
+    <div class="member-top-bar"></div>
+    <div class="modal-content">
+        <span class="close-btn"></span>
+            <div class="log-in">登入會員帳號</div>
+            <input type="email" placeholder="輸入電子信箱" class="input-member" name="login-email">
+            <input type="password" placeholder="輸入密碼" class="input-member" name="login-password">
+            <button class="register-btn" id="login-register-btn">登入帳戶</button>
+            <div class="fail-email-password">電子郵件或密碼錯誤</div>
+            <div class="success-login">登入成功</div>
+        <div class="question">還沒有帳戶？<a href="#" class="question" id="q-login">點此註冊</a></div>  
+    </div>
+</div>
+
+<div class="overlay"></div>
+
+<div class="modal" id="modal-signup">
+    <div class="member-top-bar"></div>
+    <div class="modal-content">
+        <span class="close-btn"></span>
+            <div class="log-in">註冊會員帳號</div>
+            <input type="text" placeholder="輸入姓名" class="input-member" name="signup-name">
+            <input type="email" placeholder="輸入電子郵件" class="input-member" name="signup-email">
+            <input type="password" placeholder="輸入密碼" class="input-member" name="signup-password">
+            <button class="register-btn" id="signup-register-btn">註冊新帳戶</button>
+            <div class="fail-email-registed">Email 已經註冊帳戶</div>
+            <div class="fail-registed">註冊失敗，請檢查email password</div>
+            <div class="success-signup">註冊成功，請登入系統</div>
+        <div class="question">已經有帳戶了？<a href="#" class="question" id="q-signup">點此登入</a></div>  
+    </div>
+</div>
+
+<div class="order-details">
+  <h1>行程預定成功！</h1>
+  <p>訂單號碼：<span class="order-number"></span></p>
+  <p>價格：<span class="order-price"></span></p>
+  <p>景點名稱：<span class="order-attraction-name"></span></p>
+  <p>景點地址：<span class="order-attraction-address"></span></p>
+  <img class="order-attraction-image" alt="景點圖片"/>
+  <p>日期：<span class="order-date"></span></p>
+  <p>時間：<span class="order-time"></span></p>
+  <p>聯絡人姓名：<span class="order-contact-name"></span></p>
+  <p>聯絡人電子郵件：<span class="order-contact-email"></span></p>
+  <p>聯絡人電話：<span class="order-contact-phone"></span></p>
+  <p>支付狀態：<span class="order-status"></span></p>
+</div>
+
+
+
+
+<div class="loader"></div>
+<div class="copyright-bar">COPYRIGHT © 2021 台北一日遊</div>
+  <script src="static/scripts.js"></script>
+  
+</body>
+</html>
