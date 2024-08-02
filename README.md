@@ -1,2 +1,2 @@
-# diaryexchange
+# mood
 diary_exchange
