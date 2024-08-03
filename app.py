@@ -6,7 +6,7 @@ from controllers import user_controller, attraction_controller, booking_controll
 app = FastAPI()
 
 # 靜態頁面
-app.mount("app1/static", StaticFiles(directory="static"), name="static")
+app.mount("/app1/static", StaticFiles(directory="static"), name="static")
 app.include_router(static_pages.router)
 
 # API 路由
