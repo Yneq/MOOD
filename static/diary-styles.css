@@ -1,0 +1,325 @@
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    background: rgb(65, 65, 65);
+    font-family: "Inter", sans-serif;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    color: #fff;
+}
+
+.navbar {
+    width: 100%;
+    height: 54px;
+    background-color: rgba(255, 255, 255, 0.156);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.156);
+}
+
+.nav-content {
+    width: 100%;
+    max-width: 1200px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 15px;
+    box-sizing: border-box;
+}
+
+.title {
+    color: rgba(68, 136, 153, 1);
+    font-size: 30px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.booking-btn {
+    border: solid 0px;
+    border-radius: 10px;
+    font-size: 16px;
+    width: 84px;
+    height: 34px;
+    align-items: center;
+    display: flex;
+    cursor: pointer;
+    white-space: nowrap;
+    justify-content: center;    
+}
+
+.main-content {
+    width: 100%;
+    max-width: 1200px;
+    display: flex;
+    flex-grow: 1;
+    padding: 20px;
+    gap: 20px;
+    margin-top: 20px;
+    box-sizing: border-box;
+}
+
+.calendar-wall {
+    width: 300px;
+    max-height: 260px;
+    background: rgba(128, 128, 128, 0.3);
+    backdrop-filter: blur(45px);
+    border-radius: 15px;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+    overflow-y: auto;
+    flex-shrink: 0;
+    box-sizing: border-box;
+}
+
+.calendar-day {
+    position: relative;
+    width: 100%;
+    padding-bottom: 100%;
+    cursor: pointer;
+}
+
+.calendar-day-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 14px;
+    border-radius: 50%;
+    transition: background-color 0.3s;
+}
+
+.calendar-day-content:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.calendar-day.has-entry .calendar-day-content::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    background-color: rgba(68, 136, 153, 1);
+    border-radius: 50%;
+}
+
+.diary-entry {
+    flex-grow: 1;
+    background: rgba(128, 128, 128, 0.3);
+    backdrop-filter: blur(45px);
+    border-radius: 15px;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+textarea {
+    width: 100%;
+    height: 300px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    padding: 10px;
+    margin-bottom: 10px;
+    resize: vertical;
+    box-sizing: border-box;
+    font-size: 20px;
+}
+
+button {
+    background-color: rgba(68, 136, 153, 1);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: rgba(68, 136, 153, 0.8);
+}
+
+footer {
+    width: 100%;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.6);
+    padding: 20px 0;
+    background-color: rgba(255, 255, 255, 0.156);
+}
+
+a {
+    text-decoration: none;
+}
+
+.modal {
+    height: auto;
+    width: 340px;
+    background-color: rgba(255, 255, 255, 1);
+    border-radius: 6px;
+    position: fixed;
+    top: 80px;
+    left:50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    box-shadow: 0px 4px 60px 0px rgba(170, 170, 170, 1);
+    display: none;
+}
+
+.member-top-bar {
+    height: 10px;
+    background: linear-gradient(270deg,#253032 0%, #9ea7aa 100%);
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+  
+.modal-content {
+    padding: 15px;
+    text-align: center;
+    border-radius: 6px;
+    position: relative;
+    box-sizing: border-box;
+}
+  
+.log-in {
+    font-size: 24px;
+    color: rgba(102, 102, 102, 1);
+    text-align: center;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+  
+.close-btn {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    right: 10px;
+    top: 10px;
+    cursor: pointer;
+    background-image: url('close.png');
+    background-size: cover;
+    background-color: rgba(255, 255, 255, 1);
+}
+  
+.input-member {
+    width: 100%;
+    max-height: 47px;
+    font-size: 16px;
+    padding: 15px;
+    margin-top: 10px;
+    border-radius: 5px;
+    border: 1px solid rgba(204, 204, 204, 1);
+    box-sizing: border-box;
+}
+  
+.register-btn {
+    max-height: 47px;
+    width: 100%;
+    font-size: 19px;
+    background-color: rgb(100 109 112);
+    margin-top: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    padding: 15px;
+    color: rgba(255, 255, 255, 1);
+    border: 1px solid rgba(204, 204, 204, 1);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+  
+.question {
+    color: rgba(102, 102, 102, 1);
+}
+  
+#q-login, #q-signup {
+    text-decoration: underline;
+}
+  
+.fail-email-password, .fail-email-registed, .fail-registed {
+    display: none;
+    margin-bottom: 5px;
+    color: rgb(164, 11, 11);
+}
+  
+.success-signup, .success-login{
+    display: none;
+    margin-bottom: 5px;
+    color: rgb(11, 164, 95);
+}
+  
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 999;
+    background-color: rgba(0, 0, 0, 0.5);
+    width: 100%;
+    height: 100%;
+    display: none;
+}
+
+.question a {
+    text-decoration: none;
+}
+
+.fail-message, .success-message {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.fail-message {
+    background-color: #ffcccc;
+    color: #cc0000;
+}
+
+.success-message {
+    background-color: #ccffcc;
+    color: #006600;
+}
+
+#saveDiaryBtn {
+    font-size: 20px;
+}
+
+@media (max-width: 768px) {
+    .navbar, .nav-content, .main-content, footer {
+        width: 100%;
+        padding-left: 15px;
+        padding-right: 15px;
+        box-sizing: border-box;
+    }
+
+    .main-content {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 20px 15px;
+        margin-top: 10px;
+    }
+
+    .calendar-wall {
+        width: 100%;
+        max-width: 100%;
+        max-height: none;
+        overflow-y: visible;
+        margin-bottom: 20px;
+    }
+
+    .diary-entry {
+        width: 100%;
+        margin-right: 0;
+    }
+}

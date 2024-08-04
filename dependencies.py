@@ -4,33 +4,53 @@ from mysql.connector import pooling
 import datetime
 import jwt
 from fastapi import HTTPException, Depends
+from dotenv import load_dotenv
+import os
 
-
-
-
+load_dotenv() 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-SECRET_KEY = "vance"
-ALGORITHM = "HS256"
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
 
 
-db_config = {
-	"user": "root",
-	"host": "localhost",
-	"password": "244466666",
-	"database": "tdt"
+rds_db_config = {
+	"user": os.getenv("DB_USER"),
+	"host": os.getenv("RDS_HOST"),
+	"password": os.getenv("RDS_PASSWORD"),
+	"database": os.getenv("RDS_MOOD")
 }
 
 # 建立 MySQL 連接池
 pool = pooling.MySQLConnectionPool(
-	pool_name = "mypool",
+	pool_name = "aws_rds_pool",
 	pool_size = 10,
-	**db_config
+	**rds_db_config
 )
+print("Connection pool created successfully")
+
+
 
 def get_db():
-	return pool.get_connection()
+    connection = None
+    try:
+        connection = pool.get_connection()
+        if connection is None:
+            raise HTTPException(status_code=503, detail="無法獲取數據庫連接")
+        yield connection
+    except pooling.PoolError as e:
+        raise HTTPException(status_code=503, detail=f"數據庫連接錯誤: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"意外錯誤: {str(e)}")
+    finally:
+        if connection is not None:
+            try:
+                if connection.is_connected():
+                    connection.close()
+                    print("數據庫連接已關閉")
+            except Exception as e:
+                print(f"關閉連接時發生錯誤: {str(e)}")
 	
 
 async def create_access_token(data: dict, expires_delta: datetime.timedelta = datetime.timedelta(days=7)):

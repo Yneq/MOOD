@@ -6,9 +6,9 @@ router = APIRouter()
 @router.get("/", include_in_schema=False)
 async def index(request: Request):
 	return FileResponse("./static/index.html", media_type="text/html")
-@router.get("/attraction/{id}", include_in_schema=False)
+@router.get("/diary", include_in_schema=False)
 async def attraction(request: Request, id: int):
-	return FileResponse("./static/attraction.html", media_type="text/html")
+	return FileResponse("./static/diary.html", media_type="text/html")
 @router.get("/booking", include_in_schema=False)
 async def booking(request: Request):
 	return FileResponse("./static/booking.html", media_type="text/html")

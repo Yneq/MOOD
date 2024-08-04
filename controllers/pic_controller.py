@@ -11,6 +11,7 @@ from fastapi.encoders import jsonable_encoder
 from datetime import datetime
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
+import logging
 
 
 load_dotenv() 
@@ -34,10 +35,10 @@ BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
 CLOUDFRONT_DOMAIN = os.getenv("CLOUDFRONT_DOMAIN")
 
 db_config = {
-    "user": "admin",
+    "user": os.getenv("DB_USER"),
     "host": os.getenv("RDS_HOST"),
     "password": os.getenv("RDS_PASSWORD"),
-    "database": "rds"
+    "database": os.getenv("RDS_RDS")
 }
 
 @router.post("/get_presigned_url")

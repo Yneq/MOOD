@@ -4,19 +4,58 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>diary</title>
-    <link rel="stylesheet" href="/app1/static/styles.css">
+    <script>
+        // 取得當前頁面的路徑，包括 /app1 如果存在的話
+        var baseUrl = window.location.pathname.split('/').slice(0, -1).join('/');
+        document.write('<base href="' + baseUrl + '/">');
+    </script>
+    <link rel="stylesheet" href="/static/styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <script defer src="/app1/static/scripts.js"></script>
+    <script defer src="/static/scripts.js"></script>
 </head>
 <body>
     <div class="navbar">
         <div class="nav-content">
-              <div class="title">MOOD</div>
+                <div>
+                    <a href="/static/index.html" class="title">MOOD</a>
+                </div>
               <div class="buttons">
-                  <button class="booking-btn" id="loginBtn">登入/註冊</button>
+                  <button class="booking-btn" id="loginBtn">Sign in</button>
               </div>
           </div>
       </div>
+
+      <div class="modal" id="modal-login">
+        <div class="member-top-bar"></div>
+        <div class="modal-content">
+            <span class="close-btn"></span>
+                <div class="log-in">Sign in to your<br>MOOD account</div>
+                <input type="email" placeholder="Email address" class="input-member" name="login-email">
+                <input type="password" placeholder="Password" class="input-member" name="login-password">
+                <button class="register-btn" id="login-register-btn">Sign in</button>
+                <div class="fail-email-password">You have entered an invalid username or password</div>
+                <div class="success-login">Sign in successfully</div>
+            <div class="question">Don't have an account?<span class="question" id="q-login"> Sign up</span></div>
+        </div>
+    </div>
+    
+    <div class="overlay"></div>
+    
+    <div class="modal" id="modal-signup">
+        <div class="member-top-bar"></div>
+        <div class="modal-content">
+            <span class="close-btn"></span>
+                <div class="log-in">Sign up for your<br>MOOD account</div>
+                <input type="text" placeholder="Name" class="input-member" name="signup-name">
+                <input type="email" placeholder="Email address" class="input-member" name="signup-email">
+                <input type="password" placeholder="Password" class="input-member" name="signup-password">
+                <button class="register-btn" id="signup-register-btn">Sign up</button>
+                <div class="fail-email-registed">Email is already registered</div>
+                <div class="fail-registed">Registration failed, please check email and password</div>
+                <div class="success-signup">Registration successful, please Sign in</div>
+            <div class="question">Already have an account？<span class="question" id="q-signup">Sign in</span></div>  
+        </div>
+    </div>
 
     <div class="container">
         <div class="card-wrap">
@@ -26,7 +65,7 @@
                     <div>
                         <h2>My Mood</h2>
                         <p>Capture your feelings, one day at a time.</p>
-                        <a href="#">START</a>
+                        <a href="/static/diary.html" class="button-link">START</a>
                     </div>
                 </div>
             </div>
@@ -38,7 +77,7 @@
                     <div>
                         <h2>Friend's Mood</h2>
                         <p>Share and connect through emotions.</p>
-                        <a href="#">START</a>
+                        <a href="#" class="button-link">START</a>
                     </div>
                 </div>
             </div>
