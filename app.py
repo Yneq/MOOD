@@ -16,9 +16,9 @@ root_path = os.getenv('ROOT_PATH', '')
 # 創建 FastAPI 應用，設置 root_path
 app = FastAPI(root_path=root_path)
 
-# 不加 root_path， FastAPI 自動處理
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount(f"{root_path}/static", StaticFiles(directory="static"), name="static")
 # API 路由
 # root_path，FastAPI 自動處理
 app.include_router(static_pages.router)
