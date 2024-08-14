@@ -19,7 +19,8 @@ rds_db_config = {
 	"user": os.getenv("DB_USER"),
 	"host": os.getenv("RDS_HOST"),
 	"password": os.getenv("RDS_PASSWORD"),
-	"database": os.getenv("RDS_MOOD")
+	"database": os.getenv("RDS_MOOD"),
+	"time_zone":"-08:00"
 }
 
 # 建立 MySQL 連接池
@@ -46,11 +47,10 @@ def get_db():
     finally:
         if connection is not None:
             try:
-                if connection.is_connected():
-                    connection.close()
-                    print("數據庫連接已關閉")
+                connection.close()
+                print("數據庫連接已返回到連接池")
             except Exception as e:
-                print(f"關閉連接時發生錯誤: {str(e)}")
+                print(f"返回連接到連接池時發生錯誤: {str(e)}")
 	
 
 async def create_access_token(data: dict, expires_delta: datetime.timedelta = datetime.timedelta(days=7)):

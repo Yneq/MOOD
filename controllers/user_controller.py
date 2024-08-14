@@ -16,7 +16,7 @@ async def create_user(user: User, db=Depends(get_db)):
                 if existing_user:
                     return JSONResponse(status_code=400, content={
                         "error": True,
-                        "message": "註冊失敗，重複的 Email 或其他原因"
+                        "message": "Registration failed, please check email and password"
                     })
                 cursor.execute("INSERT INTO users(name, email, password) VALUES (%s, %s, %s)", 
                                (user.name, user.email, user.password))
@@ -59,7 +59,7 @@ async def check_user(user: UserCheckin, db=Depends(get_db)):
         if not user_data:
             return JSONResponse(status_code=400, content={
                 "error": True,
-                "message": "登入失敗，帳號或密碼錯誤或其他原因"
+                "message": "You have entered an invalid username or password"
             })
         access_token = await create_access_token(data={
             "id": user_data["id"],

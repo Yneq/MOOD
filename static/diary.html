@@ -19,17 +19,51 @@
   </div>
 
   <div class="main-content">
-      <div class="calendar-wall">
-          <!-- 日曆將通過 JS 動態生成 -->
-      </div>
-      <div class="diary-entry">
-          <h2>Moods Today</h2>
-          <textarea id="diaryContent" placeholder="How was your day..."></textarea>
-          <button id="saveDiaryBtn">Save</button>
-          <div class="fail-message" style="display: none;"></div>
-          <div class="success-message" style="display: none;"></div>
-      </div>
-  </div>
+    <div class="calendar-container">
+        <div class="calendar-header">
+            <button id="prevMonthBtn" class="month-btn">LAST</button>
+            <h2 id="currentMonthYear" class="month-title">2024年 Aug</h2>
+            <button id="nextMonthBtn" class="month-btn">NEXT</button>
+        </div>
+        <div class="calendar-wall">
+            <!-- 日曆將通過 JS 動態生成 -->
+        </div>
+        <div>
+            <a href="/static/match.html" class="title-moodsexchange">MOODs EXCHANGE</a>
+        </div>
+    </div>
+    <div class="diary-content">
+        <div class="diary-container">
+            <div class="diary-entry">
+                <div class="moodsDate">MOODs<span id="selectedDate"></span></div>
+                <textarea id="diaryContent" placeholder="How was your day..."></textarea>
+                <button id="saveDiaryBtn">SAVE</button>
+                <div class="fail-message" style="display: none;"></div>
+                <div class="success-message" style="display: none;"></div>
+            </div>
+        </div>
+        <!-- <div class="diary-container">
+            <div class="selected-diary">
+                <h2><span id="selectedDate"></span></h2>
+                <div id="selectedDiaryContent" contenteditable="false"></div>
+                
+                <div id="diaryActions">
+                    <button id="saveDiaryBtn" class="btn btn-success" style="display: none;">SAVE</button>
+                    <div id="editDeleteButtons" style="display: none;">
+                        <button id="editDiaryBtn" class="btn btn-primary">EDIT</button>
+                        <button id="deleteDiaryBtn" class="btn btn-danger">DELETE</button>
+                    </div>
+                </div>
+            </div>
+        </div> -->
+        <div class="diary-container">
+            <h2>Recent Diaries</h2>
+            <div id="recentDiaries">
+              <!-- JavaScript 動態添加多篇日記 -->
+            </div>
+        </div>
+    </div>
+</div>
 
   <footer>
       COPYRIGHT © 2024 VANCE

@@ -3,265 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <title>發表文章</title>
-    <style>
-        body {
-            font-family: "Microsoft JhengHei", Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        form {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        textarea {
-            height: 100px;
-            width: 100%;
-            font-size: 20px;
-        }
-        #imagePreview {
-            max-width: 100%;
-            max-height: 200px;
-            margin-top: 10px;
-        }
-        .message {
-            border: 1px solid #ddd;
-            padding: 10px;
-            margin-top: 20px;
-            position: relative;
-        }
-        .message img {
-            max-width: 100%;
-            max-height: 300px;
-        }
-        .button {
-            width: 50px;
-            cursor: pointer;
-            border-radius: 5px;
-        }
-        .delete-button {
-        position: absolute;
-        top: 5px;
-        right: 5px;
-        cursor: pointer;
-        background-color: #095a7c;
-        color: white;
-        border: none;
-        padding: 5px 10px;
-        border-radius: 3px;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/board-styles.css">
+    <script defer src="/static/board.js"></script>
+
 </head>
 <body>
-    <h1>發表一篇文章</h1>
-    <form id="postForm">
-        <textarea id="textInput" placeholder="輸入文字內容"></textarea>
-        <input type="file" id="imageInput" accept="image/*">
-        <button type="submit" class="button">發送</button>
-    </form>
-    <img id="imagePreview" style="display: none;">
-    <div id="messages"></div>
+    <div class="navbar">
+        <div class="nav-content">
+          <div>
+              <a href="/static/index.html" class="title">MOOD</a>
+          </div>
+          <button class="booking-btn" id="loginBtn">Sign in</button>
+        </div>
+    </div>
 
-    <script>
-        let messages = [];
+    <div class="main-content">
+        <h1>PUBLIC MOODs</h1>
+        <form id="postForm">
+            <textarea id="textInput" placeholder="SHARE YOUR MOODs"></textarea>
+            <div class="choose-file">
+            <label for="imageInput" class="custom-file-upload">
+                CHOOSE FILE
+            </label>
+                <input type="file" id="imageInput" accept="image/*">
+                <span id="fileNameDisplay">NO FILE CHOSEN</span>
+            </div>    
+                <button type="submit" class="share-btn" id="shareDiaryBtn">SHARE</button>
+        </form>
+        <img id="imagePreview" style="display: none;">
+        <div id="messages"></div>
+    </div>
 
-        let wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        let socket = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
+    <footer>
+        <p>&copy; 2024 Vance. All rights reserved.</p>
+    </footer>
 
-        socket.onmessage = function(event) {
-            console.log("Received WebSocket message:", event.data);
-            const message = JSON.parse(event.data);
-            console.log("Parsed message:", message);
-            
-            if (!messages.some(m => m.id === message.id)) {
-                console.log("Adding new message to array");
-                messages.unshift(message);
-                renderMessages();
-            } else {
-            console.log("Message already exists, not adding");
-            }
-        };
+      <!--sign in model-->
+  <div class="modal" id="modal-login">
+    <div class="member-top-bar"></div>
+    <div class="modal-content">
+        <span class="close-btn"></span>
+            <div class="log-in">Sign in to your<br>MOOD account</div>
+            <input type="email" placeholder="Email address" class="input-member" name="login-email">
+            <input type="password" placeholder="Password" class="input-member" name="login-password">
+            <button class="register-btn" id="login-register-btn">Sign in</button>
+            <div class="fail-email-password">You have entered an invalid username or password</div>
+            <div class="success-login">Sign in successfully</div>
+        <div class="question">Don't have an account?<span class="question" id="q-login"> Sign up</span></div>
+    </div>
+</div>
 
-        async function loadMessages() {
-            try {
-                const response = await fetch('/get_messages');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                messages = await response.json();
-                renderMessages();
-                
-                console.log("Page loaded, attempting WebSocket connection...");
-                console.log("WebSocket URL:", `${wsProtocol}//${window.location.host}/ws`);
+<div class="overlay"></div>
 
-            } catch (error) {
-                console.error('Error loading messages:', error);
-                document.getElementById('messages').innerHTML = '<p>載入留言時發生錯誤，請稍後再試。</p>';
-            }
-        }
+<div class="modal" id="modal-signup">
+    <div class="member-top-bar"></div>
+    <div class="modal-content">
+        <span class="close-btn"></span>
+            <div class="log-in">Sign up for your<br>MOOD account</div>
+            <input type="text" placeholder="Name" class="input-member" name="signup-name">
+            <input type="email" placeholder="Email address" class="input-member" name="signup-email">
+            <input type="password" placeholder="Password" class="input-member" name="signup-password">
+            <button class="register-btn" id="signup-register-btn">Sign up</button>
+            <div class="fail-email-registed">Email is already registered</div>
+            <div class="fail-registed">Registration failed, please check email and password</div>
+            <div class="success-signup">Registration successful, please Sign in</div>
+        <div class="question">Already have an account？<span class="question" id="q-signup">Sign in</span></div>  
+    </div>
+</div>
 
-        function renderMessages() {
-            const messagesDiv = document.getElementById('messages');
-            messagesDiv.innerHTML = ''; // 清空現有留言
-
-            messages.forEach(message => {
-                console.log("Rendering message:", message);
-                const messageDiv = document.createElement('div');
-                messageDiv.className = 'message';
-                messageDiv.dataset.id = message.id;
-                
-                const textP = document.createElement('p');
-                textP.textContent = message.text;
-                messageDiv.appendChild(textP);
-                
-                if (message.imageUrl && message.imageUrl.trim() !== '') {
-                const img = document.createElement('img');
-                img.src = message.imageUrl;
-                img.onerror = function() {
-                    console.error('Failed to load image:', message.imageUrl);
-                    this.style.display = 'none';
-                };
-                messageDiv.appendChild(img);
-            }
-
-                const deleteButton = document.createElement('button');
-                deleteButton.textContent = '刪除';
-                deleteButton.className = 'delete-button';
-                deleteButton.dataset.id = message.id;
-
-                deleteButton.onclick = (e) => {
-                    e.preventDefault();
-                    deleteMessage(message.id);
-                };
-                messageDiv.appendChild(deleteButton);
-
-                messagesDiv.appendChild(messageDiv);
-            });
-        }
-
-        // 頁面加載時調用
-        document.addEventListener('DOMContentLoaded', loadMessages);
-
-        let lastSubmitTime = 0;
-        const SUBMIT_COOLDOWN = 5000; // 5 seconds in milliseconds
-
-        document.getElementById('postForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const submitButton = this.querySelector('button[type="submit"]');
-            const now = Date.now();
-            const timeElapsed = now - lastSubmitTime;
-
-            if (timeElapsed < SUBMIT_COOLDOWN) {
-                const remainingTime = Math.ceil((SUBMIT_COOLDOWN - timeElapsed) / 1000);
-                alert(`請等待${remainingTime}秒後再發送新文章`);
-                return;
-            }
-            
-            submitButton.disabled = true;
-
-            const text = document.getElementById('textInput').value.trim();
-            const imageFile = document.getElementById('imageInput').files[0];
-
-            if (!text && !imageFile) {
-                alert('請輸入文字或選擇圖片');
-                submitButton.disabled = false;
-                return;
-            }
-
-            let imageUrl = '';
-            if (imageFile) {
-                try {
-                    // 獲取預簽名 URL
-                    const presignedUrlResponse = await fetch('/get_presigned_url', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ filename: imageFile.name }),
-                    });
-                    const { url: presignedUrl, key, cloudfront_url } = await presignedUrlResponse.json();
-
-                    // 上傳圖片到 S3
-                    await fetch(presignedUrl, {
-                        method: 'PUT',
-                        body: imageFile,
-                        headers: {
-                            'Content-Type': imageFile.type,
-                        },
-                    });
-
-                    imageUrl = cloudfront_url;
-                } catch (error) {
-                    console.error('Error uploading image:', error);
-                    alert('上傳圖片時發生錯誤，請稍後再試。');
-                    submitButton.disabled = false;
-                    return;
-                }
-            }
-
-            try {
-                const response = await fetch('/save_message', {
-                    method: 'POST',
-                    body: JSON.stringify({ text, imageUrl }),
-                    headers: { 'Content-Type': 'application/json' }
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const savedMessage = await response.json();
-                console.log('Saved message:', savedMessage); // 添加這行來查看返回的消息格式
-
-                // 使用服務器返回的完整消息對象
-                messages.unshift(savedMessage);
-                renderMessages();
-
-                // 通過 WebSocket 發送新留言
-                console.log("Sending message via WebSocket:", JSON.stringify(savedMessage));
-                socket.send(JSON.stringify(savedMessage));
-
-                lastSubmitTime = now;
-
-                // 清空表單
-                this.reset();
-                document.getElementById('imagePreview').style.display = 'none';
-
-                // 5秒後重新啟用提交按鈕
-                setTimeout(() => {
-                    submitButton.disabled = false;
-                }, SUBMIT_COOLDOWN);
-
-            } catch (error) {
-                console.error('Error saving message:', error);
-                alert('保存留言時發生錯誤，請稍後再試。');
-                submitButton.disabled = false;
-            }
-        });
-
-        async function deleteMessage(messageId) {
-            if (!messageId) {
-                console.error('Invalid message ID');
-                return;
-            }
-            try {
-                const response = await fetch(`/delete_message/${messageId}`, {
-                    method: 'DELETE'
-                });
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                // 從本地數組中移除留言並重新渲染
-                messages = messages.filter(message => message.id !== messageId);
-                renderMessages();
-            } catch (error) {
-                console.error('Error deleting message:', error);
-                alert('刪除留言時發生錯誤，請稍後再試。');
-            }
-        }
-    </script>
 </body>
 </html>

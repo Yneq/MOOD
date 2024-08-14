@@ -39,15 +39,6 @@ body {
     cursor: pointer;
 }
 
-.title-moodsexchange {
-    color: rgba(68, 136, 153, 1);
-    font-size: 20px;
-    font-weight: bold;
-    cursor: pointer;
-    display: flex;
-    justify-content: center;;
-}
-
 .booking-btn {
     border: solid 0px;
     border-radius: 10px;
@@ -71,112 +62,14 @@ body {
     margin-top: 20px;
     box-sizing: border-box;
     flex-wrap: nowrap;
-    display: flex;
+    flex-direction: column;
 }
 
-.calendar-wall {
-    max-width: 500px;
-    background: rgba(128, 128, 128, 0.3);
-    backdrop-filter: blur(45px);
-    border-radius: 15px;
-    padding: 20px;
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 5px;
-    overflow: hidden;
-    flex-shrink: 0;
-    box-sizing: border-box;
-    flex: 0 0 300px;
-    margin-bottom: 20px;
-    
-}
-
-.calendar-day {
-    position: relative;
-    width: 100%;
-    padding-bottom: 100%;
-    cursor: pointer;
-    border-radius: 50%;
-}
-
-.calendar-day-content {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 14px;
-    border-radius: 50%;
-    transition: background-color 0.3s;
-}
-
-.calendar-day-content:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-}
-
-.calendar-day.has-entry .calendar-day-content::after {
-    content: '';
-    position: absolute;
-    bottom: 2px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 4px;
-    height: 4px;
-    background-color: rgba(68, 136, 153, 1);
-    border-radius: 50%;
-}
-
-.diary-entry, .selected-diary {
-    background: rgba(128, 128, 128, 0.3);
-    backdrop-filter: blur(45px);
-    border-radius: 15px;
-    padding: 20px;
-    box-sizing: border-box;
-}
-
-.moodsDate {
-    font-size: 25px;
-    font-weight: bold;
-    padding: 15px;
-    color: rgba(68, 136, 153, 1);
-}
-
-#selectedDate {
-    margin-left: 20px;
-}
-
-.entry-content {
-    margin-bottom: 10px;
-}
-
-.selected-diary {
-    flex-grow: 1;
-}
-
-.diary-content {
-    width: 100%;
-}
-
-#selectedDiaryContent {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    color: #fff;
-    padding: 10px;
-    min-height: 200px;
-    overflow-y: auto;
-    font-size: 20px;
-    margin-bottom: 10px;
-}
-
-.diary-container {
-    flex-grow: 1;
+form {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    margin-bottom: 20px;
+    gap: 10px;
+    width: 100%;
 }
 
 textarea {
@@ -193,10 +86,6 @@ textarea {
     font-size: 20px;
 }
 
-#diaryContent::placeholder {
-    color: #989898;
-}
-
 button {
     background-color: rgba(68, 136, 153, 1);
     color: white;
@@ -204,10 +93,72 @@ button {
     padding: 10px 20px;
     border-radius: 5px;
     cursor: pointer;
+    width: 75px;
 }
 
 button:hover {
     background-color: rgba(68, 136, 153, 0.8);
+}
+
+.share-btn {
+    width: 130px;
+    font-size: 20px;
+    border-radius: 10px;
+}
+
+.choose-file {
+    display: flex;
+    align-items: center;
+    
+}
+
+.message {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 10px;
+    margin-top: 20px;
+    position: relative;
+    background: rgba(128, 128, 128, 0.3);
+    backdrop-filter: blur(45px);
+    border-radius: 15px;
+}
+
+.message img {
+    max-width: 100%;
+    max-height: 300px;
+}
+
+/* 隱藏原始的文件選擇按鈕 */
+#imageInput {
+    display: none;
+}
+
+/* 自定義文件選擇按鈕樣式 */
+.custom-file-upload {
+    display: inline-block;
+    padding: 10px 20px;
+    color: white;
+    background-color: rgba(68, 136, 153, 1);
+    border-radius: 10px;
+    cursor: pointer;
+    max-width: 135px;
+    font-size: 20px;
+    margin-right: 20px;
+}
+
+.custom-file-upload:hover {
+    background-color: #538a8a;
+}
+
+.delete-button {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    cursor: pointer;
+    background-color: rgba(68, 136, 153, 1);
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 3px;
 }
 
 footer {
@@ -350,82 +301,45 @@ a {
     color: #006600;
 }
 
-#saveDiaryBtn {
-    font-size: 20px;
-}
-
-.recent-diary-entry {
-    margin-bottom: 15px;
-    padding: 10px;
-    background-color: rgba(255, 255, 255, 0.1);
-    border-radius: 5px;
-}
-
-.recent-diary-entry h3 {
-    margin-top: 0;
-    color: #448899;
-}
-
-.recent-diary-entry p {
-    margin-bottom: 0;
-}
-
-.month-title {
-    margin: 0;
-    font-size: 1.2em;
-    color: white;
-}
-
-.weekday {
+.user-identifier {
     font-weight: bold;
-    text-align: center;
-    margin-bottom: -40px;
-    border-radius: 0;
-    cursor: default;
+    color: #333;
 }
 
-.calendar-day.empty {
-    background-color: transparent;
-    cursor: default;
+.timestamp {
+    font-size: 0.8em;
+    color: #666;
+    margin-left: 10px;
 }
 
-
-.calendar-container {
-    background: rgba(128, 128, 128, 0.3);
-    backdrop-filter: blur(45px);
-    border-radius: 15px;
-    overflow: hidden;
-    width: 450px;
-}
-  
-.calendar-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 5px;
-    background-color: rgba(128, 128, 128, 0.3);
-    border-radius: 15px;
-    backdrop-filter: blur(45px);
-    margin-bottom: 5px;
-}
-
-.month-btn {
-    padding: 5px 10px;
-    background-color: rgba(255, 255, 255, 0.2);
-    color: white;
-    border: none;
+.message-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 10px 20px;
     border-radius: 5px;
-    cursor: pointer;
-    border-radius: 30px;
+    color: white;
+    font-weight: bold;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+    z-index: 1000;
 }
-  
-.month-btn:hover {
-    background-color: rgba(255, 255, 255, 0.3);
+
+.message-container.show {
+    opacity: 1;
 }
 
+.message-container.success {
+    background-color: #4CAF50;
+}
 
-/**/
+.message-container.error {
+    background-color: #f44336;
+}
 
+.message-container.info {
+    background-color: #2196F3;
+}
 
 @media (max-width: 768px) {
     .navbar, .nav-content, .main-content, footer {
@@ -440,19 +354,5 @@ a {
         align-items: stretch;
         padding: 20px 15px;
         margin-top: 10px;
-    }
-
-    .calendar-wall, .diary-container {
-        width: 100%;
-        max-width: 768px;
-    }
-    .calendar-container {
-        max-width: 768px;
-        width: 100%;
-      }
-
-    .diary-entry {
-        width: 100%;
-        margin-right: 0;
     }
 }

@@ -1,3 +1,4 @@
+
 body {
   display: flex;
   justify-content: center;
@@ -6,7 +7,7 @@ body {
   background: rgb(65, 65, 65);
   font-family: "Inter", sans-serif;
   margin: 0;
-  padding: 20px;
+  padding: 0;
   box-sizing: border-box;
 }
 
@@ -65,12 +66,15 @@ body {
   justify-content: center; /* Center the text horizontally */
 }
 
-
 .container {
+  flex: 1;
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 20px;
   flex-wrap: wrap;
+  margin-top: 74px; /* 為 navbar 留出空間 */
+
 }
 .card-wrap {
   width: 300px;
@@ -147,6 +151,7 @@ body {
   left: 24px;
   right: 24px;
 }
+
 a{
   text-decoration: none;
 }
@@ -159,6 +164,7 @@ footer {
   padding: 20px 0;
   position: absolute;
   background-color: rgba(255, 255, 255, 0.156);
+  position: fixed;
   bottom: 0;
   width: 100%;
 }
@@ -262,13 +268,6 @@ footer {
   display: none;
 }
 
-@media (max-width: 659px) {
-  .container {
-    margin-bottom: 25px;
-    margin-top: 20px;
-    gap: 15px;
-  }
-}
 
 /* diary-styles.css */
 
@@ -368,6 +367,10 @@ footer {
 }
 
 @media (max-width: 768px) {
+  html {
+    height: 135vh;
+  }
+
   .diary-main-content {
       flex-direction: column;
   }
