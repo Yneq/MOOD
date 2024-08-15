@@ -12,10 +12,8 @@ async def serve_html(file_path: str, request: Request):
 		# 注入根路徑到 HTML
         content = content.replace('</head>', f'<script>window.ROOT_PATH = "{root_path}";</script></head>')
         # 動態替換靜態文件路徑
-        content = content.replace('href="/static/', f'href="/app1/static/')
-        content = content.replace('src="/static/', f'src="/app1/static/')
-        # content = content.replace('href="/static/', f'href="{root_path}/static/')
-        # content = content.replace('src="/static/', f'src="{root_path}/static/')
+        content = content.replace('href="/static/', f'href="{root_path}/static/')
+        content = content.replace('src="/static/', f'src="{root_path}/static/')
 
     return HTMLResponse(content)
 
