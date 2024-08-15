@@ -10,18 +10,29 @@ import traceback
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 從環境變量獲取 ROOT_PATH，如果沒有設置則默認為空字符串
+# 從環境變量獲取 ROOT_PATH，如果沒有設置則默認為 '/app1'
 root_path = os.getenv('ROOT_PATH', '/app1')
+print(f"Using root_path: {root_path}")
 
-# 創建 FastAPI 應用，設置 root_path
+# 創建 FastAPI 應用
 app = FastAPI()
 
 @app.middleware("http")
-async def add_root_path(request: Request, call_next):
+async def handle_root_path(request: Request, call_next):
     logger.info(f"Received request: {request.method} {request.url.path}")
-    if not request.url.path.startswith(root_path):
+    
+    if request.url.path == root_path or request.url.path == f"{root_path}/":
+        # 如果請求的是根路徑，直接處理
+        request.scope["path"] = "/"
+    elif request.url.path.startswith(root_path):
+        # 如果路徑以 root_path 開頭，移除 root_path
+        request.scope["path"] = request.url.path[len(root_path):]
+        if not request.scope["path"]:
+            request.scope["path"] = "/"
+    else:
+        # 如果路徑不以 root_path 開頭，重定向到帶有 root_path 的 URL
         return RedirectResponse(url=f"{root_path}{request.url.path}")
-    request.scope["path"] = request.scope["path"].replace(root_path, "", 1)
+    
     response = await call_next(request)
     logger.info(f"Returning response: {response.status_code}")
     return response
@@ -30,19 +41,17 @@ async def add_root_path(request: Request, call_next):
 app.mount(f"{root_path}/static", StaticFiles(directory="static"), name="static")
 
 # API 路由
-app.include_router(static_pages.router, prefix=root_path)
-app.include_router(user_controller.router, prefix=root_path)
-app.include_router(diary_controller.router, prefix=root_path)
-app.include_router(pic_controller.router, prefix=root_path)
-app.include_router(match_controller.router, prefix=root_path)
+app.include_router(static_pages.router)
+app.include_router(user_controller.router)
+app.include_router(diary_controller.router)
+app.include_router(pic_controller.router)
+app.include_router(match_controller.router)
 
-print(f"Current root_path: {root_path}")
-
-@app.get(f"{root_path}/health")
+@app.get("/health")
 async def health_check():
     return {"status": "healthy"}
 
-@app.get(f"{root_path}/")
+@app.get("/")
 async def root():
     return {"message": "Welcome to the root of the application"}
 
