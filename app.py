@@ -14,11 +14,17 @@ logger = logging.getLogger(__name__)
 root_path = os.getenv('ROOT_PATH', '')
 
 # 創建 FastAPI 應用，設置 root_path
-app = FastAPI(root_path=root_path)
+app = FastAPI()
+
+@app.middleware("http")
+async def add_root_path(request: Request, call_next):
+    request.scope["path"] = request.scope["path"].replace("/app1", "", 1)
+    response = await call_next(request)
+    return response
 
 
-# app.mount("/static", StaticFiles(directory="static"), name="static")
-app.mount(f"{root_path}/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+# app.mount(f"{root_path}/static", StaticFiles(directory="static"), name="static")
 # API 路由
 # root_path，FastAPI 自動處理
 app.include_router(static_pages.router)
@@ -29,6 +35,11 @@ app.include_router(match_controller.router)
 
 print(f"Current root_path: {root_path}")
 
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+    
 # 全局異常處理器
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
