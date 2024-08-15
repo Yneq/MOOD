@@ -367,9 +367,9 @@ footer {
 }
 
 @media (max-width: 768px) {
-  html {
+  /* html {
     height: 135vh;
-  }
+  } */
 
   .diary-main-content {
       flex-direction: column;
