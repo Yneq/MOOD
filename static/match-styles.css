@@ -473,7 +473,7 @@ a {
     background-color: rgba(68, 136, 153, 1);
     color: white;
     padding: 16px;
-    border-radius: 13%;
+    border-radius: 15px;
     box-shadow: 5px 12px 22px rgb(104 204 229);
     z-index: 1000;
     font-size: 17px;
@@ -490,7 +490,7 @@ a {
     background-color: rgba(68, 136, 153, 1);
     color: white;
     padding: 16px;
-    border-radius: 13%;
+    border-radius: 15px;
     box-shadow: 5px 12px 22px rgb(104 204 229);
     z-index: 1000;
     font-size: 17px;
