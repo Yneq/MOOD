@@ -24,7 +24,7 @@ async function loadMessages() {
         renderMessages();
     } catch (error) {
         console.error('Error loading messages:', error);
-        document.getElementById('messages').innerHTML = '<p>載入留言時發生錯誤，請稍後再試。</p>';
+        document.getElementById('messages').innerHTML = '<p>MESSAGE LOADED FAILED, PLEASE TRY AGAIN LATER</p>';
     }
 }
 // loadMessages();
@@ -160,7 +160,7 @@ document.getElementById('postForm').addEventListener('submit', async function(e)
             imageUrl = cloudfront_url;
         } catch (error) {
             console.error('Error uploading image:', error);
-            alert('上傳圖片時發生錯誤，請稍後再試。');
+            alert('UPLOAD PICTURE FAILED, PLEASE TRY AGAIN LATER。');
             submitButton.disabled = false;
             return;
         }
@@ -515,11 +515,11 @@ socket.onmessage = function(event) {
     }
 };
 socket.onerror = function(error) {
-    console.error("WebSocket 錯誤:", error);
+    console.error("WebSocket ERROR:", error);
 };
 
 socket.onclose = function(event) {
-    console.log("WebSocket 連接已關閉");
+    console.log("WebSocket Connect closed");
     // 可以在這裡添加重新連接的邏輯
 };
 }
