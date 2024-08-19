@@ -359,6 +359,12 @@ a {
     padding: 10px;
     background-color: rgba(255, 255, 255, 0.1);
     border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.recent-diary-entry:hover {
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
 }
 
 .recent-diary-entry h3 {
