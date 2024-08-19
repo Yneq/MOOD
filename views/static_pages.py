@@ -9,11 +9,11 @@ root_path = os.getenv('ROOT_PATH', '')
 async def serve_html(file_path: str, request: Request):
     with open(file_path, 'r') as file:
         content = file.read()
-		# 注入根路徑到 HTML
-        content = content.replace('</head>', f'<script>window.ROOT_PATH = "{root_path}";</script></head>')
-        # 動態替換靜態文件路徑
-        content = content.replace('href="/static/', f'href="{root_path}/static/')
-        content = content.replace('src="/static/', f'src="{root_path}/static/')
+		# # 注入根路徑到 HTML
+        # content = content.replace('</head>', f'<script>window.ROOT_PATH = "{root_path}";</script></head>')
+        # # 動態替換靜態文件路徑
+        # content = content.replace('href="/static/', f'href="{root_path}/static/')
+        # content = content.replace('src="/static/', f'src="{root_path}/static/')
 
     return HTMLResponse(content)
 
