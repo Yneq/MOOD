@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, APIRouter, Depends, WebSocket, WebSocketDisconnect
 from datetime import datetime, date
-from typing import List, Dict, Tuple, Set
+from typing import List, Dict, Tuple, Set, Any
 from controllers.diary_controller import get_diary_entries
 from dependencies import get_db, get_current_user
 from models.diary import PresigneUrlRequest, DiaryEntryResponse, DiaryEntryRequest
@@ -10,6 +10,11 @@ import mysql.connector
 import pytz
 import logging
 import traceback
+from contextlib import closing
+from mysql.connector import pooling, Error
+
+
+
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -141,52 +146,16 @@ async def get_daily_matches(
         raise HTTPException(status_code=500, detail=f"匹配過程中發生錯誤: {str(e)}")
 
 
-# @router.post("/matching/request")
-# async def send_matching_request(
-#     partner_id: int,
-#     current_user: dict = Depends(get_current_user),
-#     db: mysql.connector.connection.MySQLConnection = Depends(get_db)
-# ):
-#     cursor = db.cursor(dictionary=True)
-    
-#     try:
-#         # 檢查是否已經存在未處理的請求
-#         cursor.execute(
-#             "SELECT * FROM user_match_requests WHERE request_id = %s AND request_date = CURDATE() AND status = 'pending'",
-#             (current_user['id'])
-#         )
-#         existing_request = cursor.fetchone()
-        
-#         if existing_request:
-#             return {"message": "You've already swiped right once today.", "status": "already_requested"}
-        
-#         # 創建新的配對請求
-#         cursor.execute(
-#             "INSERT INTO user_match_requests (request_id, recipient_id , request_date, status) VALUES (%s, %s, CURDATE(), 'pending')",
-#             (current_user['id'], partner_id)
-#         )
-#         db.commit()
-
-#         return {"message": "You have sent a MOODs exchange request!", "status": "success"}
-#     except Exception as e:
-#         db.rollback()
-#         raise HTTPException(status_code=500, detail=str(e))
-#     finally:
-#         cursor.close()
-
-
-
-
 @router.get("/matching/requests")
 async def get_matching_requests(current_user: dict = Depends(get_current_user), db: mysql.connector.connection.MySQLConnection = Depends(get_db)):
     
     cursor = db.cursor(dictionary=True)
-    try:
+    try:  #抓取pending表裡面 requester 的名字
         cursor.execute("""
-            SELECT umr.*, u.name as user_name 
-            FROM user_match_requests umr
-            JOIN users u ON umr.requester_id = u.id
-            WHERE umr.recipient_id = %s AND DATE(umr.request_date) = CURDATE() AND umr.status = 'pending'
+            SELECT user_match_requests.*, name as user_name
+            FROM user_match_requests
+            JOIN users ON user_match_requests.requester_id = users.id
+            WHERE user_match_requests.recipient_id = %s AND user_match_requests.status = 'pending'
         """, (current_user['id'],))
 
         requests = cursor.fetchall()
@@ -197,98 +166,107 @@ async def get_matching_requests(current_user: dict = Depends(get_current_user), 
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
 @router.put("/matching/respond/{requester_id}")
 async def respond_to_matching_request(
     requester_id: int,
     response: MatchResponse,
-    current_user: dict = Depends(get_current_user),
-    db: mysql.connector.connection.MySQLConnection = Depends(get_db)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: pooling.PooledMySQLConnection = Depends(get_db)
 ):
-    print(f"Received request to respond to match request from user {requester_id} with action {response.action}")
+    logger.debug(f"開始處理用戶 {requester_id} 的配對回應")
     if response.action not in ['accept', 'reject']:
         raise HTTPException(status_code=400, detail="無效的操作")
-    
-    cursor = db.cursor(dictionary=True)
 
     try:
-        db.start_transaction()
+        with db.cursor(dictionary=True) as cursor:
+            # 檢查當前用戶
+            cursor.execute("SELECT name FROM users WHERE id = %s", (current_user['id'],))
+            result = cursor.fetchone()
+            if not result:
+                raise HTTPException(status_code=404, detail="找不到當前用戶")
+            current_user_name = result['name']
 
-        cursor.execute("SELECT name FROM users WHERE id = %s", (current_user['id'],))
-        current_user_name_result = cursor.fetchone()
-        if not current_user_name_result:
-            db.rollback()
-            raise HTTPException(status_code=404, detail="找不到當前用戶")
-        current_user_name = current_user_name_result['name']
-
-        # 檢查請求是否存在且當前用戶是接收者
-        cursor.execute(
-            "SELECT * FROM user_match_requests WHERE requester_id = %s AND recipient_id = %s AND status = 'pending'",
-            (requester_id, current_user['id'])
-        )
-        
-        request_info = cursor.fetchone()
-        if not request_info:
-            db.rollback()
-            raise HTTPException(status_code=404, detail="找不到配對請求或您沒有權限回應此請求")
-
-        if response.action == 'accept':
-            # 檢查雙方是否有其他活躍的匹配或待處理的請求
+            # 檢查配對請求
             cursor.execute("""
-                SELECT * FROM user_matches 
-                WHERE (user_id IN (%s, %s) OR partner_id IN (%s, %s)) AND status = 'accepted'
-            """, (current_user['id'], requester_id, current_user['id'], requester_id))
-            existing_match = cursor.fetchone()
-            
-            if existing_match:
-                db.rollback()
-                raise HTTPException(status_code=400, detail="您或對方已經有一個活躍的匹配")
+                SELECT * FROM user_match_requests 
+                WHERE requester_id = %s AND recipient_id = %s AND status = 'pending'
+            """, (requester_id, current_user['id']))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="找不到配對請求或您沒有權限回應此請求")
 
-            # 更新請求狀態
-            cursor.execute(
-                "UPDATE user_match_requests SET status = 'accepted' WHERE requester_id = %s AND recipient_id = %s",
-                (requester_id, current_user['id'])
-            )
-            # 創建新的匹配
+            if response.action == 'accept':
+                # 檢查是否有活躍的匹配
+                cursor.execute("""
+                    SELECT * FROM users
+                    WHERE id IN (%s, %s) AND is_matching = 1
+                """, (requester_id, current_user['id']))
+                if cursor.fetchone():
+                    raise HTTPException(status_code=400, detail="您或您的夥伴已經有一個活躍的匹配")
+
+                # 更新請求狀態和創建新的匹配
+                cursor.execute("""
+                    UPDATE user_match_requests 
+                    SET status = 'accepted' 
+                    WHERE requester_id = %s AND recipient_id = %s
+                """, (requester_id, current_user['id']))
+                cursor.fetchone()  # 讀取空結果集
+
+                cursor.execute("""
+                    UPDATE users 
+                    SET is_matching = 1 
+                    WHERE id IN (%s, %s)
+                """, (requester_id, current_user['id']))
+                cursor.fetchone()  # 讀取空結果集
+
+                cursor.execute("""
+                    INSERT INTO user_matches 
+                    (user_id, partner_id, match_date, status) 
+                    VALUES (%s, %s, CURDATE(), 'accepted'),
+                           (%s, %s, CURDATE(), 'accepted')
+                """, (current_user['id'], requester_id, requester_id, current_user['id']))
+                cursor.fetchone()  # 讀取空結果集
+
+            else:  # reject
+                logger.debug("處理拒絕操作")
+                cursor.execute("""
+                    UPDATE users 
+                    SET is_matching = 0 
+                    WHERE id IN (%s, %s)
+                """, (requester_id, current_user['id']))
+                cursor.fetchone()  # 讀取空結果集
+
+                cursor.execute("""
+                    INSERT INTO user_matches 
+                    (user_id, partner_id, match_date, status) 
+                    VALUES (%s, %s, CURDATE(), 'rejected'),
+                           (%s, %s, CURDATE(), 'rejected')
+                """, (current_user['id'], requester_id, requester_id, current_user['id']))
+                cursor.fetchone()  # 讀取空結果集
+
+            # 刪除配對請求
             cursor.execute("""
-                INSERT INTO user_matches 
-                (user_id, partner_id, match_date, status) 
-                VALUES (%s, %s, CURDATE(), 'accepted'),
-                       (%s, %s, CURDATE(), 'accepted')
-            """,
-            (current_user['id'], requester_id, requester_id, current_user['id']))
-
-            # 清理其他待處理的請求
-            cursor.execute("""
-                UPDATE user_match_requests 
-                SET status = 'rejected' 
-                WHERE (requester_id IN (%s, %s) OR recipient_id IN (%s, %s)) 
-                AND status = 'pending' AND NOT (requester_id = %s AND recipient_id = %s)
-            """, (current_user['id'], requester_id, current_user['id'], requester_id, requester_id, current_user['id']))
-
-            await manager.send_personal_message(f"User {current_user_name} accepted your match request", requester_id)
-        else:
-            # 拒絕請求
-            cursor.execute(
-                "UPDATE user_match_requests SET status = 'rejected' WHERE requester_id = %s AND recipient_id = %s",
-                (requester_id, current_user['id'])
-            )
-            await manager.send_personal_message(f"User {current_user_name} rejected your match request", requester_id)
+                DELETE FROM user_match_requests 
+                WHERE requester_id = %s AND recipient_id = %s
+            """, (requester_id, current_user['id']))
+            cursor.fetchone()  # 讀取空結果集
 
         db.commit()
-        return {"message": "Successfully processed the match request"}
+        logger.debug("任務提交成功")
 
-    except mysql.connector.Error as db_error:
+        return {"message": f"Scucessfully {response.action}ed the match request"}
+
+    except mysql.connector.Error as e:
+        logger.error(f"數據庫錯誤: {str(e)}", exc_info=True)
         db.rollback()
-        print(f"Database error: {db_error}")
-        raise HTTPException(status_code=500, detail="資料庫操作錯誤")
+        raise HTTPException(status_code=500, detail=f"處理請求時發生數據庫錯誤: {str(e)}")
     except Exception as e:
+        logger.error(f"未知錯誤: {str(e)}", exc_info=True)
         db.rollback()
-        print(f"Unexpected error: {e}")
-        print(f"Error details: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"處理請求時發生未知錯誤: {str(e)}")
     finally:
-        cursor.close()
+        if not db.is_closed():
+            db.close()
+        logger.debug("數據庫連接關閉")
 
 
 @router.post("/matching/request_exchange")
@@ -299,6 +277,31 @@ async def request_exchange(
     cursor = db.cursor(dictionary=True)
     
     try:
+        cursor.execute("""
+            SELECT partner_id from user_matches WHERE user_id =%s
+            AND status = 'accepted'
+            ORDER BY created_at DESC LIMIT 1
+        """, (current_user['id'],)) 
+        result = cursor.fetchone()
+
+        if result:
+            partner_id = result['partner_id']
+            cursor.execute("UPDATE users SET is_matching = 0 WHERE id IN (%s, %s)", (current_user['id'], partner_id))
+        else:
+            cursor.execute("UPDATE users SET is_matching = 0 WHERE id = %s", (current_user['id'],))
+
+        # 檢查用戶在過去 3 天內的配對次數
+        cursor.execute("""
+            SELECT COUNT(*) as match_count
+            FROM user_matches
+            WHERE user_id = %s AND match_date >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+        """, (current_user['id'],))
+        
+        match_count = cursor.fetchone()['match_count']
+        
+        if match_count >= 3:
+            return {"message": "You have reached the maximum number of matches in the past 3 days", "status": "limit_reached"}
+            
         # 檢查用戶是否已經有待處理的請求
         cursor.execute("""
             SELECT * FROM user_match_requests 
@@ -312,13 +315,14 @@ async def request_exchange(
         
         # 尋找可配對的用戶
         cursor.execute("""
-            SELECT id FROM users 
+            SELECT id, name
+            FROM users 
             WHERE id != %s 
-            AND id NOT IN (SELECT user_id FROM user_matches WHERE status = 'accepted')
-            AND id NOT IN (SELECT partner_id FROM user_matches WHERE status = 'accepted')
+            AND is_matching = 0 
             AND id NOT IN (SELECT requester_id FROM user_match_requests WHERE status = 'pending')
             AND id NOT IN (SELECT recipient_id FROM user_match_requests WHERE status = 'pending')
-            ORDER BY RAND() LIMIT 1
+            ORDER BY RAND() 
+            LIMIT 1
         """, (current_user['id'],))
         
         partner = cursor.fetchone()
@@ -331,11 +335,7 @@ async def request_exchange(
             "INSERT INTO user_match_requests (requester_id, recipient_id, request_date, status) VALUES (%s, %s, CURDATE(), 'pending')",
             (current_user['id'], partner['id'])
         )
-        # 同時更新 user_matches 表
-        # cursor.execute(
-        #     "INSERT INTO user_matches (user_id, partner_id, match_date, status) VALUES (%s, %s, CURDATE(), 'pending')",
-        #     (current_user['id'], partner['id'])
-        # )
+
         db.commit()
         return {"message": "Your match request is on its way!", "status": "success", "partner_id": partner['id']}
     
@@ -354,54 +354,107 @@ async def get_matching_status(
     cursor = db.cursor(dictionary=True)
     
     try:
-        # 檢查用戶是否有待處理的請求
+    # 獲取用戶當前狀態和最新的match記錄，有雙方的is_matching
+    # 第一個LEFT JOIN獲取最新的一個match
+    # 第二個LEFT JOIN獲取匹配夥伴的資料
         cursor.execute("""
-            SELECT * FROM user_match_requests 
-            WHERE requester_id = %s AND status = 'pending'
-        """, (current_user['id'],))
-        pending_request = cursor.fetchone()
-        
-        if pending_request:
-            return {"status": "pending", "message": "You have a pending match request"}
-        
-        # 檢查用戶的配對狀態
-        cursor.execute("""
-            SELECT um.status, um.partner_id, um.match_date, u.name as partner_name
-            FROM user_matches um
-            JOIN users u ON u.id = um.partner_id
-            WHERE um.user_id = %s
-            ORDER BY um.match_date DESC
+            SELECT users.is_matching, 
+            user_matches.id as match_id, user_matches.status as match_status, 
+            user_matches.partner_id, user_matches.created_at,
+            users_partner.name as partner_name, users_partner.is_matching as partner_is_matching
+        FROM users
+        LEFT JOIN (
+            SELECT * FROM user_matches
+            WHERE user_id = %s
+            ORDER BY created_at DESC
             LIMIT 1
-        """,(current_user['id'],))
-        match = cursor.fetchone()
-        
-        if not match:
-            return {"status": "no_match", "message": "No partner matched yet. Click EXCHANGE to find a diary buddy!"}
-        
-        if match['status'] == 'pending':
-            return {"status": "pending", "message": "Waiting for partner to accept the match"}
-        
-        if match['status'] == 'accepted':
-            # 檢查夥伴是否有待處理的新配對請求
-            cursor.execute("""
-                SELECT * FROM user_match_requests 
-                WHERE requester_id = %s AND status = 'pending'
-            """, (match['partner_id'],))
-            partner_pending_request = cursor.fetchone()
-            
-            if partner_pending_request:
-                return {"status": "partner_repairing", "message": "Your partner is currently repairing. You cannot view their diary at the moment."}
-            
-            return {
-                "status": match['status'],
-                "partner_id": match['partner_id'],
-                "partner_name": match['partner_name'],
-                "match_date": match['match_date']
-            }
-        return {"status": "unknown", "message": "Unknown matching status"}
+        ) user_matches ON users.id = user_matches.user_id
+        LEFT JOIN users users_partner ON user_matches.partner_id = users_partner.id
+        WHERE users.id = %s
+        """, (current_user['id'], current_user['id']))
     
+        user_info = cursor.fetchone()
+
+            # 檢查是否存在user_matches.id
+        if user_info['match_id'] is not None:
+            if user_info['is_matching'] == 1:
+                # 檢查最新user_matches裡有沒有accepted
+                cursor.execute("""
+                    SELECT id, status FROM user_matches
+                    WHERE (user_id = %s AND partner_id = %s) OR (user_id = %s AND partner_id = %s)
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """, (current_user['id'], user_info['partner_id'], user_info['partner_id'], current_user['id']))
+                latest_match = cursor.fetchone()
+            
+                if latest_match and latest_match['status'] == 'accepted':
+                    # # 確保雙方的 is_matching 狀態一致，為了解決當 B 接受後立即調用 checkMatchStatus()，發現 A 的 is_matching 仍為 0（可能是由於數據庫更新的延遲）
+                    # cursor.execute("UPDATE users SET is_matching = 1 WHERE id IN (%s, %s)", (current_user['id'], user_info['partner_id']))
+                    # db.commit()
+                    # 匹配有效
+                    return {
+                        "status": "accepted",
+                        "partner_id": user_info['partner_id'],
+                        "partner_name": user_info['partner_name'],
+                        "match_date": user_info['created_at'].isoformat() if user_info['created_at'] else None
+                    }
+                # 如果 is_matching 不為 1 或匹配狀態不為 'accepted'
+            cursor.execute("UPDATE users SET is_matching = 0 WHERE id = %s", (current_user['id'],))
+            db.commit()
+            return {"status": "match_expired", "message": "Your previous match has expired. Click EXCHANGE to find a new diary buddy!"}
+        else:
+            # 沒有匹配記錄
+            return {"status": "no_match", "message": "You don't have any current matches. Click EXCHANGE to find a diary buddy!"}
+
+        # 用戶當前is_matching=0，檢查是否有待處理的請求
+        cursor.execute("""
+            SELECT 'outgoing' as request_type, recipient_id, requester_id
+            FROM user_match_requests 
+            WHERE requester_id = %s AND status = 'pending'
+            UNION
+            SELECT 'incoming' as request_type, recipient_id, requester_id
+            FROM user_match_requests 
+            WHERE recipient_id = %s AND status = 'pending'
+        """, (current_user['id'], current_user['id']))
+
+        pending_request = cursor.fetchone()
+
+        if pending_request:
+            if pending_request['request_type'] == 'outgoing':
+                return {
+                    "status": "pending", 
+                    "message": "You have a pending outgoing match request",
+                    "recipient_id": pending_request.get('recipient_id')
+                }
+            elif pending_request['request_type'] == 'incoming':
+                requester_id = pending_request.get('requester_id')
+                if requester_id:
+                    cursor.execute("SELECT name FROM users WHERE id = %s", (requester_id,))
+
+                    requester_data = cursor.fetchone()
+                    requester_name = requester_data['name'] if requester_data else "Unknown"
+
+                    return {
+                        "status": "incoming_request",
+                        "message": f"You have a pending incoming match request from {requester_name}",
+                        "requester_id": requester_id,
+                        "requester_name": requester_name
+                    }
+                else:
+                    print(f"Error: requester_id not found in pending_request: {pending_request}")
+                    return {"status": "error", "message": "Invalid request data"}
+
+        return {"status": "no_match", "message": "NO partner matched yet. Click EXCHANGE to find a diary buddy!"}
+    except Exception as e:
+        print(f"Error in get_matching_status: {str(e)}")
+        return {"status": "error", "detail": f"Unexpected error: {str(e)}"}
     finally:
         cursor.close()
+
+
+
+
+
 
 @router.get("/get_partner_diary/{partner_id}", response_model=List[DiaryEntryResponse])
 async def get_partner_diary(
@@ -414,24 +467,33 @@ async def get_partner_diary(
 
         cursor = db.cursor(dictionary=True)
 
-        # 檢查是否有與該夥伴的有效匹配
+        # 步驟 1: 獲取當前用戶的活躍匹配
         cursor.execute("""
-            SELECT * FROM user_matches 
-            WHERE (user_id = %s AND partner_id = %s) OR (user_id = %s AND partner_id = %s)
-            AND status = 'accepted'
-        """, (current_user['id'], partner_id, partner_id, current_user['id']))
+            SELECT um.partner_id, um.created_at
+            FROM user_matches um
+            JOIN users u1 ON um.user_id = u1.id
+            JOIN users u2 ON um.partner_id = u2.id
+            WHERE um.user_id = %s AND um.status = 'accepted'
+            AND u1.is_matching = 1 AND u2.is_matching = 1
+            ORDER BY um.created_at DESC
+            LIMIT 1
+        """, (current_user['id'],))
         
-        match = cursor.fetchone()
-        if not match:
-            raise HTTPException(status_code=403, detail="You are no longer matched with this user")
-        cursor.fetchall()  # 清空結果，避免 unread result 錯誤
+        current_match = cursor.fetchone()
+
+        # 這裡考慮檢查user_match_requests，按下exchange之後應該不再顯示夥伴的日記
+
+        # 步驟 2: 驗證請求的夥伴 ID 是否為當前匹配的夥伴
+        if not current_match or current_match['partner_id'] != partner_id:
+            raise HTTPException(status_code=403, detail="You are not currently matched with this user")
+
 
         # 獲取夥伴的日記
         cursor.execute("""
             SELECT d.id, d.user_id, d.title, d.content, d.image_url, d.is_public, 
-                   d.date, d.created_at, d.updated_at, u.email
+                   d.date, d.created_at, d.updated_at, users.email
             FROM diary_entries d
-            JOIN users u ON d.user_id = u.id
+            JOIN users ON d.user_id = users.id
             WHERE d.user_id = %s 
             ORDER BY d.date DESC 
             LIMIT 5

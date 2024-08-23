@@ -26,7 +26,7 @@ rds_db_config = {
 # 建立 MySQL 連接池
 pool = pooling.MySQLConnectionPool(
 	pool_name = "aws_rds_pool",
-	pool_size = 20,
+	pool_size = 30,
 	**rds_db_config
 )
 print("Connection pool created successfully")
@@ -41,13 +41,15 @@ def get_db():
             raise HTTPException(status_code=503, detail="無法獲取數據庫連接")
         yield connection
     except pooling.PoolError as e:
-        raise HTTPException(status_code=503, detail=f"數據庫連接錯誤: {str(e)}")
+        print(f"數據庫連接池錯誤: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"數據庫連接池錯誤: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"意外錯誤: {str(e)}")
+        print(f"獲取數據庫連接時發生意外錯誤: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"獲取數據庫連接時發生意外錯誤: {str(e)}")
     finally:
         if connection is not None:
             try:
-                connection.close()
+                connection.close()  # 將連接返回到連接池
                 print("數據庫連接已返回到連接池")
             except Exception as e:
                 print(f"返回連接到連接池時發生錯誤: {str(e)}")

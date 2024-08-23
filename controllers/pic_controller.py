@@ -15,6 +15,8 @@ from dependencies import get_current_user
 from typing import Dict
 import logging
 import traceback
+from mysql.connector import Error
+
 
 
 
@@ -38,7 +40,7 @@ db_config = {
     "user": os.getenv("DB_USER"),
     "host": os.getenv("RDS_HOST"),
     "password": os.getenv("RDS_PASSWORD"),
-    "database": os.getenv("RDS_RDS")
+    "database": os.getenv("RDS_MOOD")
 }
 
 @router.post("/get_presigned_url")
@@ -73,7 +75,7 @@ async def save_message(request: MessageRequest, current_user: dict = Depends(get
         cursor = conn.cursor()
         insert_query = """
         INSERT INTO messages(text, imageUrl, email)
-        VALUE (%s, %s, %s)
+        VALUES (%s, %s, %s)
         """
         logger.info(f"Executing query: {insert_query} with params: {(request.text, request.imageUrl, email)}")
 
@@ -144,60 +146,94 @@ async def delete_message(message_id: int, current_user: Dict = Depends(get_curre
 
 
 @router.get('/get_messages')
-async def get_messages():
+async def get_messages(current_user: Dict = Depends(get_current_user)):
     try:
-        # 連接到 rds 資料庫
-        rds_conn = mysql.connector.connect(**db_config)
-        rds_cursor = rds_conn.cursor(dictionary=True)
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
         
         # 查詢 messages
         messages_query = """
-        SELECT id, text, imageUrl, created_at, email 
-        FROM messages 
-        ORDER BY created_at DESC
+        SELECT m.id, m.text, m.imageUrl, m.created_at, m.email, 
+               u.name as user_name,
+               (SELECT COUNT(*) FROM likes WHERE message_id = m.id) as like_count,
+               EXISTS(SELECT 1 FROM likes WHERE message_id = m.id AND user_id = %s) as is_liked_by_user
+        FROM messages m
+        LEFT JOIN users u ON m.email = u.email
+        ORDER BY m.created_at DESC
         """
-        rds_cursor.execute(messages_query)
-        messages = rds_cursor.fetchall()
-        rds_cursor.close()
-        rds_conn.close()
 
-        # 連接到 mood_db 資料庫
-        mood_db_config = db_config.copy()
-        mood_db_config['database'] = 'mood_db'
-        mood_conn = mysql.connector.connect(**mood_db_config)
-        mood_cursor = mood_conn.cursor(dictionary=True)
+        cursor.execute(messages_query, (current_user['id'],))
+        messages = cursor.fetchall()
 
-        # 獲取所有用戶的 email 和 name
-        users_query = "SELECT email, name FROM users"
-        mood_cursor.execute(users_query)
-        users = {user['email']: user['name'] for user in mood_cursor.fetchall()}
-        mood_cursor.close()
-        mood_conn.close()
-
-        # 合併數據並格式化
+        # 格式化消息
         formatted_messages = []
         for message in messages:
-            user_name = users.get(message['email'], message['email'].split('@')[0] if message['email'] else 'Anonymous')
             formatted_messages.append({
                 'id': message['id'],
                 'text': message['text'],
                 'imageUrl': message['imageUrl'],
                 'created_at': message['created_at'].isoformat() if message['created_at'] else None,
-                'user_name': user_name,
-                'email': message['email']
+                'user_name': message['user_name'] or message['email'].split('@')[0] if message['email'] else 'Anonymous',
+                'email': message['email'],
+                'like_count': message['like_count'],
+                'is_liked_by_user': bool(message['is_liked_by_user'])
             })
 
-        # 使用自定義序列化器
-        serialized_messages = jsonable_encoder(formatted_messages, custom_encoder={datetime: custom_json_serializer})
-        return JSONResponse(content=serialized_messages)
-    except Exception as e:
-        logger.error(f"Error fetching messages: {e}", exc_info=True)
+        return JSONResponse(content=formatted_messages)
+    except Error as e:
+        print(f"Error fetching messages: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
 
-def custom_json_serializer(obj):
-    if isinstance(obj, datetime):
-        return obj.isoformat()
-    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
+@router.post("/toggle_like/{message_id}")
+async def toggle_like(message_id: int, current_user: Dict = Depends(get_current_user)):
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)    
+        # 首先檢查消息
+        check_message_query = "SELECT id FROM messages WHERE id = %s"
+        cursor.execute(check_message_query, (message_id,))
+        message = cursor.fetchone()
+        
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+
+        user_id = current_user.get('id')
+        user_email = current_user.get('email')
+
+        print(f"處理用戶 ID: {user_id}, 電子郵件: {user_email} 對訊息 ID: {message_id} 的讚")
+        
+        check_like_query = "SELECT * FROM likes WHERE user_id = %s AND message_id =%s"
+        cursor.execute(check_like_query, (user_id, message_id))
+        existing_like = cursor.fetchone()
+
+        if existing_like:
+            delete_like_query = "DELETE FROM likes WHERE user_id = %s AND message_id = %s"
+            cursor.execute(delete_like_query, (user_id, message_id))
+            conn.commit()
+            return {"liked": False, "message": "Like removed"}
+        
+        else:
+            insert_like_query = "INSERT INTO likes (user_id, message_id, created_at) VALUES (%s, %s, %s) "
+            cursor.execute(insert_like_query, (user_id, message_id, datetime.now()))
+            conn.commit()
+            return{"liked": True, "message": "Like added"}
+
+    except mysql.connector.Error as e:
+        print(f"Database error: {e}")
+        print(f"Error code: {e.errno}")
+        print(f"SQL State: {e.sqlstate}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    finally:
+        cursor.close()
+        conn.close()
+            
+
 
 
 

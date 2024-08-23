@@ -14,10 +14,18 @@ let currentUserName = localStorage.getItem('user_name') || 'Anonymous';
 
 async function loadMessages() {
     try {
-        const response = await fetch('/get_messages');
+        const token = localStorage.getItem('token');
+        const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        };
+
+        const response = await fetch('/get_messages', { headers });
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
         messages = await response.json();
         console.log("Received messages:", messages);  // 添加這行來查看接收到的數據
 
@@ -43,14 +51,14 @@ function renderMessages() {
         console.log("Rendering message:", message);
         if (!message || typeof message !== 'object' || !message.id) {
             console.error("Invalid message object:", message);
-            return; // 跳過這個無效的消息
+            return; // 跳過無效的訊息
         }
 
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message';
         messageDiv.dataset.id = message.id;
 
-         // 使用後端提供的用戶名
+         // 使用後端的用戶名
         const userSpan = document.createElement('span');
         userSpan.className = 'user-identifier';
         userSpan.textContent = getUserDisplayName(message) + ': ';
@@ -78,6 +86,29 @@ function renderMessages() {
         timestampSpan.className = 'timestamp';
         timestampSpan.textContent = new Date(message.created_at).toLocaleString();
         messageDiv.appendChild(timestampSpan);
+
+        const messageFooter = document.createElement('div');
+        messageFooter.className = 'message-footer';
+        // 添加愛心按鈕
+        const likeButton = document.createElement('button');
+        likeButton.className = 'like-button';
+        likeButton.innerHTML = '&#9829;'
+        if (message.is_liked_by_user) {
+            likeButton.classList.add('liked');
+        }
+        likeButton.onclick = (e) => {
+            e.preventDefault();
+            toggleLike(message.id);
+        };
+        messageFooter.appendChild(likeButton);
+
+        // 添加點讚數
+        const likeCount = document.createElement('span');
+        likeCount.className = 'like-count';
+        likeCount.textContent = message.like_count || 0;
+        messageDiv.appendChild(likeCount);
+        messageDiv.appendChild(messageFooter);
+
     }
         // 只有當消息屬於當前用戶時，才添加刪除按鈕
         if (message.email === localStorage.getItem('email')) {
@@ -95,6 +126,59 @@ function renderMessages() {
 
         messagesDiv.appendChild(messageDiv);
     });
+}
+
+//like button
+async function toggleLike(messageId) {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/toggle_like/${messageId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('無法切換按讚狀態');
+        }
+
+        const data = await response.json();
+
+        // 更新本地消息數據
+        const messageIndex = messages.findIndex(m => m.id === messageId);
+        if (messageIndex !== -1) {
+            messages[messageIndex].is_liked_by_user = data.liked;
+            messages[messageIndex].like_count = data.liked 
+                ? (messages[messageIndex].like_count || 0) + 1 
+                : (messages[messageIndex].like_count || 1) - 1;
+        }
+        
+        // 更新 UI
+        const messageElement = document.querySelector(`.message[data-id="${messageId}"]`);
+        if (messageElement) {
+            const likeButton = messageElement.querySelector('.like-button');
+            const likeCount = messageElement.querySelector('.like-count');
+            
+            if (likeButton) {
+                if (data.liked) {
+                    likeButton.classList.add('liked');
+                } else {
+                    likeButton.classList.remove('liked');
+                }
+            }
+            
+            if (likeCount) {
+                likeCount.textContent = messages[messageIndex].like_count;
+            }
+        }
+
+        showMessage(data.liked ? 'Like' : 'Dislike', 'success');
+    } catch (error) {
+        console.error('切換按讚狀態時發生錯誤:', error);
+        showMessage('Renew Like failed', 'error');
+    }
 }
 
 function getUserDisplayName(message) {
@@ -280,6 +364,8 @@ const q_signupBtn = document.getElementById('q-signup');
 const overlay = document.querySelector('.overlay');
 const loginRegisterBtn = document.getElementById('login-register-btn');
 const signupRegisterBtn = document.getElementById('signup-register-btn');
+const userAvatar = document.getElementById('userAvatar');
+
 
 let isLoggedIn = !!localStorage.getItem('token');
 
@@ -288,8 +374,12 @@ console.log('Current page:', window.location.pathname);
 const isBoardPage = window.location.pathname.includes('board.html');
 console.log('Is board page:', isBoardPage);
 
-
-function updateLoginButtonText() {
+function updateUserDisplay() {
+    const userName = localStorage.getItem('user_name');
+    if (userName && userAvatar) {
+        userAvatar.textContent = userName.charAt(0).toUpperCase();
+        userAvatar.style.display = 'flex';
+    }
     if (loginBtn) {
         loginBtn.textContent = isLoggedIn ? 'Sign out' : 'Sign in';
         console.log('Button text updated:', loginBtn.textContent);
@@ -298,7 +388,7 @@ function updateLoginButtonText() {
     }
 }
 
-updateLoginButtonText();
+updateUserDisplay();
 
 // 登入按鈕事件
 if (loginBtn) {
@@ -319,7 +409,10 @@ isLoggedIn = false;
 localStorage.removeItem('token');
 localStorage.removeItem('user_name');
 localStorage.removeItem('email');
-updateLoginButtonText();
+updateUserDisplay();
+if (userAvatar) {
+    userAvatar.style.display = 'none';
+}
 console.log('Sign out');
 if (isBoardPage) {
     window.location.href = '/static/index.html';
@@ -366,6 +459,7 @@ function handleSignup() {
     const failEmailRegisted = document.querySelector('.fail-email-registed');
     const failRegisted = document.querySelector('.fail-registed');
     const successSignupMessage = document.querySelector('.success-signup');
+    
 
     if (!signupnameInput || !signupemailInput || !signuppasswordInput) {
         console.log('Some signup inputs are missing');
@@ -448,7 +542,7 @@ function handleLogin() {
                 setTimeout(() => {
                     closeModals();
                     isLoggedIn = true;
-                    updateLoginButtonText();
+                    updateUserDisplay();
                     if (isDiaryPage) {
                         window.location.reload();
                     }

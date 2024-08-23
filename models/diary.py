@@ -20,6 +20,10 @@ class MessageResponse(BaseModel):
     class Config:
         orm_mode = True
 
+class MoodData(BaseModel):
+    mood_score: Optional[int] = None
+    weather: Optional[str] = None
+
 
 class DiaryEntryRequest(BaseModel):
     title: str
@@ -41,6 +45,7 @@ class DiaryEntryResponse(BaseModel):
     created_at: str
     updated_at: str
     email: Optional[str] = None  # 將 email 設為可選字段
+    mood_data: Optional[MoodData] = None
 
 
     
@@ -52,3 +57,19 @@ class DiaryEntryResponse(BaseModel):
         if isinstance(v, int):
             return bool(v)
         return v
+
+class MoodEntryRequest(BaseModel):
+    mood_score: Optional[int] = Field(None, ge=0, le=5)
+    date: date
+    weather: Optional[str] = None
+    note: Optional[str] = None
+
+class MoodEntryResponse(BaseModel):
+    id: int
+    user_id: int
+    mood_score: Optional[int] = None
+    date: date
+    weather: Optional[str] = None
+    note: Optional[str]
+    created_at: datetime
+

@@ -9,18 +9,24 @@
     <script defer src="/static/scripts.js"></script>
 </head>
 <body>
-  <div class="navbar">
-      <div class="nav-content">
-        <div>
-            <a href="/" class="title">MOOD</a>
+    <div class="navbar">
+        <div class="nav-content">
+            <div>
+                <a href="/" class="title">MOOD</a>
+            </div>
+            <div>
+                <a href="/static/match.html" class="title-moodsexchange">MOODs EXCHANGE</a>
+            </div>
+            <div class="buttons user-info">
+                <div class="user-avatar" id="userAvatar"></div>
+                <button class="booking-btn" id="loginBtn">Sign in</button>
+            </div>
         </div>
-        <button class="booking-btn" id="loginBtn">Sign in</button>
-      </div>
-  </div>
+    </div>
 
   <div class="main-content">
         <div class="calendar-container">
-            <a href="/static/match.html" class="title-moodsexchange">MOODs EXCHANGE</a>
+            <a href="/static/board.html" class="title-moodsexchange">PUBLIC MOODs</a>
             <button id="exchangeBtn">EXCHANGE</button>
         </div>
   </div>
@@ -44,7 +50,9 @@
         </div>
         <div class="user2">
             <div class="diary-container">
-                <div class="moodsDate">PARTNER's MOODs</div>
+                <div class="moodsDate">PARTNER's MOODs
+                    <div class="partner-name" id="partnerName"></div>
+                </div>
                 <div id="partnerDiaryContent">
                 <!-- JavaScript 動態添加多篇日記 -->
                 </div>

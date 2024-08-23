@@ -32,6 +32,21 @@ body {
     box-sizing: border-box;
 }
 
+.user-avatar {
+    width: 32px;
+    border-radius: 50%;
+    background-color: #234064e0;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    display: none;
+  }
+#loginBtn {
+margin-left: 10px;
+}
+
 .title {
     color: rgba(68, 136, 153, 1);
     font-size: 30px;
@@ -50,6 +65,13 @@ body {
 
 .title-moodsexchange:hover {
     text-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
+}
+
+.buttons {
+    display: flex;
+    height: 34px;
+    color: rgba(68, 136, 153, 1);
+    cursor: pointer;
 }
 
 .booking-btn {
@@ -154,6 +176,13 @@ body {
 
 .entry-content {
     margin-bottom: 10px;
+    position: relative;
+}
+
+.delete-entry-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
 }
 
 .selected-diary {
@@ -358,6 +387,57 @@ a {
     font-size: 20px;
 }
 
+.diary-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+}
+
+.mood-rating, .weather-selection {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+    
+}
+
+.mood-label, .weather-label {
+    margin-right: 10px;
+    color: rgba(68, 136, 153, 1);
+    font-weight: bold
+}
+    
+
+.stars {
+    display: inline-block;
+    font-size: 24px;
+    color: #ccc;
+}
+
+.star {
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.star.active, .star:hover {
+    color: #FFD700;
+}
+
+.rating-value {
+    margin-left: 10px;
+    color: #fff;
+    font-weight: bold;
+    display: none;
+}
+
+#weatherSelect {
+    padding: 5px;
+    border-radius: 5px;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
 .recent-diary-entry {
     margin-bottom: 15px;
     padding: 10px;
@@ -365,6 +445,7 @@ a {
     border-radius: 15px;
     cursor: pointer;
     transition: all 0.3s ease;
+    position: relative;
 }
 
 .recent-diary-entry:hover {
@@ -437,7 +518,7 @@ a {
 /**/
 
 
-@media (max-width: 768px) {
+@media (max-width: 884px) {
     .navbar, .nav-content, .main-content, footer {
         width: 100%;
         padding-left: 15px;
@@ -465,4 +546,16 @@ a {
         width: 100%;
         margin-right: 0;
     }
+    .diary-actions {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    #saveDiaryBtn,
+    .weather-selection,
+    .mood-rating {
+        margin-bottom: 15px;
+    }
+
+    
 }

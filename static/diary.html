@@ -9,14 +9,20 @@
     <script defer src="/static/scripts.js"></script>
 </head>
 <body>
-  <div class="navbar">
-      <div class="nav-content">
-        <div>
-            <a href="/" class="title">MOOD</a>
-        </div>
-        <button class="booking-btn" id="loginBtn">Sign in</button>
+    <div class="navbar">
+        <div class="nav-content">
+                <div>
+                    <a href="/" class="title">MOOD</a>
+                </div>
+                <div>
+                    <a href="/static/match.html" class="title-moodsexchange">MOODs EXCHANGE</a>
+                </div>
+                <div class="buttons user-info">
+                    <div class="user-avatar" id="userAvatar"></div>
+                    <button class="booking-btn" id="loginBtn">Sign in</button>
+                </div>
+          </div>
       </div>
-  </div>
 
   <div class="main-content">
     <div class="calendar-container">
@@ -29,7 +35,7 @@
             <!-- 日曆將通過 JS 動態生成 -->
         </div>
         <div>
-            <a href="/static/match.html" class="title-moodsexchange">MOODs EXCHANGE</a>
+            <a href="/static/board.html" class="title-moodsexchange">PUBLIC MOODs</a>
         </div>
     </div>
     <div class="diary-content">
@@ -37,7 +43,32 @@
             <div class="diary-entry">
                 <div class="moodsDate">MOODs<span id="selectedDate"></span></div>
                 <textarea id="diaryContent" placeholder="How was your day..."></textarea>
-                <button id="saveDiaryBtn">SAVE</button>
+
+                <div class="diary-actions">
+                    <button id="saveDiaryBtn">SAVE</button>
+                    <div class="weather-selection">
+                        <span class="weather-label">WEATHER</span>
+                        <select id="weatherSelect">
+                            <option value="sunny">Sunny</option>
+                            <option value="cloudy">Cloudy</option>
+                            <option value="rainy">Rainy</option>
+                            <option value="snowy">Snowy</option>
+                            <option value="windy">Windy</option>
+                        </select>
+                    </div>
+                    <div class="mood-rating">
+                        <span class="mood-label">MOOD</span>
+                        <div class="stars">
+                            <span class="star" data-rating="1">★</span>
+                            <span class="star" data-rating="2">★</span>
+                            <span class="star" data-rating="3">★</span>
+                            <span class="star" data-rating="4">★</span>
+                            <span class="star" data-rating="5">★</span>
+                        </div>
+                        <span class="rating-value"></span>
+                    </div>
+                </div>
+                
                 <div class="fail-message" style="display: none;"></div>
                 <div class="success-message" style="display: none;"></div>
             </div>
@@ -85,6 +116,25 @@
             <div class="fail-registed">Registration failed, please check email and password</div>
             <div class="success-signup">Registration successful, please Sign in</div>
         <div class="question">Already have an account？<span class="question" id="q-signup">Sign in</span></div>  
+    </div>
+</div>
+  <!--manage user info-->
+<div id="user-profile-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn"></span>
+        <h2>Manage your MOOD account</h2>
+        <form id="profile-form">
+            <div class="avatar-upload">
+                <label for="avatar-upload">Uplaod you avatar</label>
+                <input type="file" id="avatar-upload" accept="image/*">
+                <img id="avatar-preview" src="#" alt="頭像預覽" style="display:none;">
+            </div>
+            <input type="password" id="current-password" placeholder="Password" required>
+            <input type="password" id="new-password" placeholder="New password">
+            <input type="password" id="confirm-password" placeholder="Confirm new password">
+            <textarea id="self-intro" placeholder="Intro yourself" maxlength="500"></textarea>
+            <button type="submit">SAVE</button>
+        </form>
     </div>
 </div>
 </body>

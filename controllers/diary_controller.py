@@ -11,7 +11,7 @@ from botocore.config import Config
 from fastapi.encoders import jsonable_encoder
 from datetime import datetime, date
 from typing import List, Dict, Union
-from models.diary import PresigneUrlRequest, DiaryEntryResponse, DiaryEntryRequest
+from models.diary import PresigneUrlRequest, DiaryEntryResponse, DiaryEntryRequest, MoodEntryRequest, MoodEntryResponse, MoodData
 from dependencies import get_db, get_current_user
 import pytz
 
@@ -112,7 +112,30 @@ async def get_diary_entry(
         # 嘗試將參數解析為整數（ID）
         try:
             entry_id = int(param)
-            query = "SELECT * FROM diary_entries WHERE id = %s AND user_id = %s"
+            query = """
+            SELECT 
+                diary_entries.id,
+                diary_entries.user_id,
+                diary_entries.title,
+                diary_entries.content,
+                diary_entries.image_url,
+                diary_entries.is_public,
+                diary_entries.date,
+                diary_entries.created_at,
+                diary_entries.updated_at,
+                mood_entries.mood_score,
+                mood_entries.weather,
+                users.email
+            FROM 
+                diary_entries
+            LEFT JOIN 
+                mood_entries ON diary_entries.user_id = mood_entries.user_id 
+                AND diary_entries.date = mood_entries.date
+            LEFT JOIN 
+                users ON diary_entries.user_id = users.id
+            WHERE 
+                diary_entries.id = %s AND diary_entries.user_id = %s
+            """
             cursor.execute(query, (entry_id, current_user["id"]))
             entry = cursor.fetchone()
             
@@ -123,7 +146,13 @@ async def get_diary_entry(
             entry['date'] = entry['date'].isoformat()
             entry['created_at'] = entry['created_at'].replace(tzinfo=pytz.UTC).astimezone(taipei_tz).isoformat()
             entry['updated_at'] = entry['updated_at'].replace(tzinfo=pytz.UTC).astimezone(taipei_tz).isoformat()
-            
+
+            mood_score = entry.pop('mood_score')
+            weather = entry.pop('weather')
+            entry['mood_data'] = MoodData(mood_score=mood_score, weather=weather) if mood_score is not None or weather is not None else None
+
+            logger.debug(f"Processed entry: {entry}")
+
             return DiaryEntryResponse(**entry)
         
         except ValueError:
@@ -131,7 +160,32 @@ async def get_diary_entry(
             query_date = datetime.strptime(param, "%Y-%m-%d").date()
             query_date = taipei_tz.localize(datetime.combine(query_date, datetime.min.time())).date()
             
-            query = "SELECT * FROM diary_entries WHERE user_id = %s AND DATE(date) = %s ORDER BY date DESC"
+            query = """
+            SELECT 
+                diary_entries.id,
+                diary_entries.user_id,
+                diary_entries.title,
+                diary_entries.content,
+                diary_entries.image_url,
+                diary_entries.is_public,
+                diary_entries.date,
+                diary_entries.created_at,
+                diary_entries.updated_at,
+                mood_entries.mood_score,
+                mood_entries.weather,
+                users.email
+            FROM 
+                diary_entries
+            LEFT JOIN 
+                mood_entries ON diary_entries.user_id = mood_entries.user_id 
+                AND diary_entries.date = mood_entries.date
+            LEFT JOIN 
+                users ON diary_entries.user_id = users.id
+            WHERE 
+                diary_entries.user_id = %s AND DATE(diary_entries.date) = %s
+            ORDER BY 
+                diary_entries.date DESC
+            """
             logger.debug(f"Executing query: {query}")
             logger.debug(f"Parameters: {current_user['id']}, {query_date}")
             
@@ -146,7 +200,10 @@ async def get_diary_entry(
                 entry['date'] = entry['date'].isoformat()
                 entry['created_at'] = entry['created_at'].replace(tzinfo=pytz.UTC).astimezone(taipei_tz).isoformat()
                 entry['updated_at'] = entry['updated_at'].replace(tzinfo=pytz.UTC).astimezone(taipei_tz).isoformat()
-            
+                mood_score = entry.pop('mood_score')
+                weather = entry.pop('weather')
+                entry['mood_data'] = MoodData(mood_score=mood_score, weather=weather) if mood_score is not None or weather is not None else None
+
             logger.debug(f"Returning entries: {entries}")
             return [DiaryEntryResponse(**entry) for entry in entries]
         
@@ -333,3 +390,76 @@ async def delete_diary_entry(
     finally:
         if cursor:
             cursor.close()
+
+@router.post("/save_mood_entry", response_model=MoodEntryResponse)
+async def save_mood_entry(
+    mood_entry: MoodEntryRequest,
+    current_user: dict = Depends(get_current_user),
+    db: mysql.connector.connection.MySQLConnection = Depends(get_db)
+):
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        now_utc = datetime.now(pytz.UTC)
+
+        check_query = "SELECT id FROM mood_entries WHERE user_id = %s AND date = %s"
+        cursor.execute(check_query, (current_user["id"], mood_entry.date))
+        existing_entry = cursor.fetchone()
+
+        if existing_entry:
+            # 更新現有記錄
+            update_query = """
+            UPDATE mood_entries 
+            SET mood_score = %s, weather = %s, note = %s
+            WHERE id = %s AND user_id = %s
+            """
+            cursor.execute(update_query, (
+                mood_entry.mood_score,
+                mood_entry.weather,
+                mood_entry.note,
+                existing_entry['id'],
+                current_user["id"]
+            ))
+        else:
+            # 創建新記錄
+            insert_query = """
+            INSERT INTO mood_entries (user_id, mood_score, date, weather, note, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(insert_query, (
+                current_user["id"],
+                mood_entry.mood_score,
+                mood_entry.date,
+                mood_entry.weather or '',
+                mood_entry.note,
+                now_utc
+            ))
+            entry_id = cursor.lastrowid
+
+        db.commit()
+
+        if existing_entry:
+            entry_id = existing_entry['id']
+        else:
+            entry_id = cursor.lastrowid
+
+        # 獲取保存的記錄
+        select_query = "SELECT * FROM mood_entries WHERE id = %s"
+        cursor.execute(select_query, (entry_id,))
+        saved_entry = cursor.fetchone()
+
+        if saved_entry:
+            return MoodEntryResponse(**saved_entry)
+        else:
+            raise HTTPException(status_code=404, detail="無法檢索保存的心情記錄")
+
+    except mysql.connector.Error as e:
+        logger.error(f"Database error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"資料庫錯誤: {str(e)}")
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"發生意外錯誤: {str(e)}")
+    finally:
+        if cursor:
+            cursor.close()
+

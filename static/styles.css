@@ -36,6 +36,21 @@ body {
   padding: 15px;
 }
 
+.user-avatar {
+  width: 32px;
+  border-radius: 50%;
+  background-color: #234064e0;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  display: none;
+}
+#loginBtn {
+  margin-left: 10px;
+}
+
 .title {
   height: 34px;
   display: flex;
@@ -45,6 +60,19 @@ body {
   font-size: 30px;
   font-weight: bold;
   cursor: pointer;
+}
+
+.title-moodsexchange {
+  color: rgba(68, 136, 153, 1);
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;;
+}
+
+.title-moodsexchange:hover {
+  text-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
 }
 
 .buttons {

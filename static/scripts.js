@@ -2,12 +2,362 @@
 let currentYear, currentMonth;
 let ws; // WebSocket 連線
 let currentPartnerId = null;
+let currentMoodScore = 0;
+let currentWeather = 'sunny';
+
 
 const SAVE_COOLDOWN = 5000; 
 let lastSaveTime = 0;
 const DELETE_COOLDOWN = 5000;
 let lastDeleteTime = 0;
 
+function initializeMatchPage() {
+    const exchangeBtn = document.getElementById('exchangeBtn');
+    console.log('Initializing match page');
+    if (exchangeBtn) {
+        if (localStorage.getItem('token') && localStorage.getItem('user_id')) {
+            connectWebSocket();
+        }
+        exchangeBtn.addEventListener('click', handleExchangeRequest);
+        checkPendingRequests();
+    }
+    checkMatchStatus(); // 初始檢查
+    // setInterval(checkMatchStatus, 60000); // 每分鐘檢查一次
+}
+
+// 定義 handleExchangeRequest 函數
+async function handleExchangeRequest() {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/matching/request_exchange', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data) {
+            throw new Error('No data received from server');
+        }
+        
+        if (data.status === 'success') {
+            showNotification('Your match request is on its way!');
+            checkMatchStatus();
+        } else if (data.status === 'pending') {
+            showNotification('A new diary buddy is waiting!');
+            // 這裡考慮 checkMatchStatus();
+        } else {
+            showNotification(data.message || 'Unknown status received');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        if (error.response) {
+            console.error('Error response:', await error.response.text());
+        }        
+        showNotification('An error occurred, please try again later.');
+    }
+}
+
+const partnerDiaryContent = document.getElementById('partnerDiaryContent');
+async function checkMatchStatus() {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/matching/status', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        const data = await response.json();
+        console.log('Match status response:', data);
+
+        const partnerNameElement = document.querySelector('.partner-name');
+        if (partnerNameElement) {
+            partnerNameElement.textContent = '';
+            partnerNameElement.style.display = 'none';
+        }
+
+        switch(data.status) {
+            case 'accepted':
+                console.log(`Match accepted with partner Name: ${data.partner_name}`);
+                if (currentPartnerId !== data.partner_id) {
+                    currentPartnerId = data.partner_id;
+                    showNotification(`You've been matched with ${data.partner_name}!`);
+                }
+                
+                if (partnerNameElement) {
+                    partnerNameElement.textContent = data.partner_name.charAt(0).toUpperCase();
+                    partnerNameElement.style.display = 'flex';
+                }
+                await loadPartnerDiary(data.partner_id);
+                break;
+            case 'pending':
+            console.log(`Match accepted with partner Name: ${data.partner_name}`);
+                if (partnerDiaryContent) {
+                    partnerDiaryContent.innerHTML = `<p>${data.message}</p>`;
+                }
+                setTimeout(checkMatchStatus, 60000); // 每60秒檢查一次
+                break;
+            case 'partner_repairing':
+                console.log('Partner is repairing');
+                if (partnerDiaryContent) {
+                    partnerDiaryContent.innerHTML = `<p>${data.message}</p>`;
+                }
+                // setTimeout(checkMatchStatus, 60000); // 每60秒檢查一次
+                break;
+            case 'no_match':
+            case 'partner_repairing':
+                console.log(data.status, data.message);
+                currentPartnerId = null;
+                if (partnerDiaryContent) {
+                    partnerDiaryContent.innerHTML = `<p>${data.message}</p>`;
+                }
+                break;
+            default:
+                console.log('No active match or unknown status');
+                currentPartnerId = null;
+                if (partnerDiaryContent) {
+                    partnerDiaryContent.innerHTML = `<p>${data.message || 'No buddy match now'}</p>`;
+                }
+                break;
+        }
+    } catch (error) {
+        console.error('Error in checkMatchStatus:', error);
+        showNotification('An error occurred while checking match status.');
+        if (partnerDiaryContent) {
+            partnerDiaryContent.innerHTML = '<p>An error occurred. Please try again later.</p>';
+        }
+    }
+}
+
+async function loadPartnerDiary(partnerId) {
+    console.log(`Attempting to load partner diary for partner ID: ${partnerId}`);
+
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/get_partner_diary/${partnerId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (response.status === 403) {
+            // 匹配已經結束，更新 UI
+            showNotification("You are no longer matched with this user");
+            return;
+        }
+
+        console.log('Response status:', response.status);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
+
+        let errorData;
+        try {
+            errorData = JSON.parse(responseText);
+        } catch (e) {
+            console.error('Error parsing JSON:', e);
+            errorData = { detail: 'Unable to parse error response' };
+        }
+
+        if (!response.ok) {
+            console.error('Server error response:', errorData);
+            
+            if (response.status === 403) {
+                showNotification(errorData.detail || "You are no longer matched with this user");
+                currentPartnerId = null;
+                checkMatchStatus();
+                return; // 提前返回，不要繼續處理
+            } else {
+                throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+            }
+        }    
+
+        const data = errorData; // 因為我們已經解析了 JSON
+        console.log('Partner diary data:', data);
+
+
+        partnerDiaryContent.innerHTML = ''; // 清空現有內容
+
+        if (data.length > 0) {
+            data.forEach(entry => {
+                const entryElement = document.createElement('div');
+                entryElement.classList.add('partnerdiary-entry');
+                entryElement.innerHTML = `
+                <div class="partnerdiary-entry">
+                    <div class="moodsDate">${entry.date}</div>
+                    <div class="partnerdiary-content">
+                        <p>${entry.content}</p>
+                    </div>
+                </div>
+                `;
+                partnerDiaryContent.appendChild(entryElement);
+            });
+            console.log(`Rendered ${data.length} diary entries`);
+
+        } else {
+            partnerDiaryContent.innerHTML = '<p>Your partner has not written any diaries yet.</p>';
+            console.log('No diary entries found for partner');
+        }
+    } catch (error) {
+        console.error('Error loading partner diary:', error);
+        console.error('Error stack:', error.stack);
+        const errorMessage = error.message || 'Failed to load partner diary';
+        showNotification(`Error: ${errorMessage}. Please try again later.`);
+        
+        if (partnerDiaryContent) {
+            partnerDiaryContent.innerHTML = `<p>Error: ${errorMessage}</p>`;
+        }
+    }
+}
+
+// 建立WebSocket連接
+
+function connectWebSocket() {
+    const userId = localStorage.getItem('user_id');
+    if (!userId) {
+        console.error('User ID not found. Unable to establish WebSocket connection.');
+        return;
+    }
+
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/${userId}`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = function() {
+        console.log('WebSocket connection established');
+    };
+
+    ws.onmessage = function(event) {
+        const message = event.data;
+        showNotification(message);
+    };
+
+    ws.onerror = function(error) {
+        console.error('WebSocket error:', error);
+    };
+
+    ws.onclose = function(event) {
+        console.log('WebSocket connection closed:', event);
+    };
+
+    // 將 WebSocket 實例存儲在全局變量中，以便在其他地方使用
+    window.matchWebSocket = ws;
+}
+    
+// 顯示通知的函數
+function showNotification(message) {
+    const notification = document.createElement('div');
+    notification.className = 'notification';
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
+}
+
+// 在頁面加載時檢查是否有待處理的配對請求
+async function checkPendingRequests() {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/matching/requests', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        const requests = await response.json();
+        requests.forEach(request => {
+            showMatchRequestNotification(request);
+        });
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+function showMatchRequestNotification(request) {
+    console.log('Showing notification for request:', request);
+    if (!request || !request.requester_id) {
+        console.error('Invalid request object:', request);
+        return;
+    }
+    const notification = document.createElement('div');
+    notification.className = 'match-request-notification';
+    notification.innerHTML = `
+        <p>You have a new match with "${request.user_name || 'SECRET'}" </p>
+        <button class="accept-btn" data-requester-id="${request.requester_id}">ACCEPT</button>
+        <button class="reject-btn" data-requester-id="${request.requester_id}">DENY</button>
+        `;
+
+    const acceptBtn = notification.querySelector('.accept-btn');
+    const rejectBtn = notification.querySelector('.reject-btn');
+    
+    acceptBtn.addEventListener('click', function() {
+        const requesterId = this.getAttribute('data-requester-id');
+        console.log('Rejecting request from requester:', requesterId);
+        respondToMatchRequest(requesterId, 'accept');
+    });
+
+    rejectBtn.addEventListener('click', function() {
+        const requesterId = this.getAttribute('data-requester-id');
+        console.log('Rejecting request from requester:', requesterId);
+        respondToMatchRequest(requesterId, 'reject');
+    });
+
+
+    document.body.appendChild(notification);
+}
+
+async function respondToMatchRequest(requesterId, action) {
+    console.log(`Responding to request from user ${requesterId} with action ${action}`);
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/matching/respond/${requesterId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ action: action })
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log('Response data:', data);
+        showNotification(data.message);
+         // 關閉 WebSocket 連接
+        if (window.matchWebSocket) {
+            window.matchWebSocket.close();
+        }
+
+        // 移除通知元素
+        const notification = document.querySelector('.match-request-notification');
+        if (notification) {
+            notification.remove();
+        }
+        // 如果接受了match請求，立即刷新match狀態和夥伴日記
+        if (action === 'accept') {
+            await checkMatchStatus();
+        }
+        if (action ==='reject') {
+            await checkMatchStatus();
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('MATCH SYSTEM ERROR, PLEASE TRY AGAIN LATER');
+    }
+}
 
 document.addEventListener('DOMContentLoaded', (event) => {
     console.log('DOM fully loaded and parsed');
@@ -22,14 +372,18 @@ document.addEventListener('DOMContentLoaded', (event) => {
     const overlay = document.querySelector('.overlay');
     const loginRegisterBtn = document.getElementById('login-register-btn');
     const signupRegisterBtn = document.getElementById('signup-register-btn');
+    const userAvatar = document.getElementById('userAvatar');
 
     let isLoggedIn = !!localStorage.getItem('token');
-
     const currentPage = window.location.pathname;
     const isMatchPage = window.location.pathname.includes('match.html');
+    const stars = document.querySelectorAll('.star');
+    const ratingValue = document.querySelector('.rating-value');
+    const weatherSelect = document.getElementById('weatherSelect');
+
 
     if (isLoggedIn) {
-        updateLoginButtonText();
+        updateUserDisplay();
         if (isMatchPage) {
             initializeMatchPage();
         }
@@ -38,7 +392,12 @@ document.addEventListener('DOMContentLoaded', (event) => {
             window.location.href = '/static/index.html';
             }
 
-    function updateLoginButtonText() {
+    function updateUserDisplay() {
+        const userName = localStorage.getItem('user_name');
+        if (userName && userAvatar) {
+            userAvatar.textContent = userName.charAt(0).toUpperCase();
+            userAvatar.style.display = 'flex';
+        }
         if (loginBtn) {
             loginBtn.textContent = isLoggedIn ? 'Sign out' : 'Sign in';
         } else {
@@ -46,8 +405,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
         }
     }
 
-    updateLoginButtonText();
-
+    updateUserDisplay();
+    
     // 登入按鈕事件
     if (loginBtn) {
         loginBtn.onclick = function(e) {
@@ -91,7 +450,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         if (window.matchWebSocket) {
             window.matchWebSocket.close();
         }
-        updateLoginButtonText();
+        isLoggedIn = false;
+        updateUserDisplay();
+        if (userAvatar) {
+            userAvatar.style.display = 'none';
+        }
         // 如果在需要登錄的頁面上登出，重定向到首頁
         const currentPage = window.location.pathname;
         if (currentPage.includes('diary.html') || currentPage.includes('match.html')) {
@@ -167,18 +530,13 @@ document.addEventListener('DOMContentLoaded', (event) => {
                         if (tokenPayload.id) {
                             localStorage.setItem('user_id', tokenPayload.id);
                         }
-                        console.log('Stored user info:', {
-                            token: data.token,
-                            user_name: localStorage.getItem('user_name'),
-                            email: localStorage.getItem('email'),
-                            user_id: localStorage.getItem('user_id')
-                        });
+
 
                     showMessage(successLoginMessage, 'Sign in successfully');
                     setTimeout(() => {
                         closeModals();
                         isLoggedIn = true;
-                        updateLoginButtonText();
+                        updateUserDisplay();
                          // 如果在 match 頁面,建立 WebSocket 連接
                         if (window.location.pathname.includes('match.html')) {
                             connectWebSocket();
@@ -273,1145 +631,707 @@ document.addEventListener('DOMContentLoaded', (event) => {
         const selectedDateElement = document.getElementById('selectedDate');
         const recentDiariesContainer = document.getElementById('recentDiaries');
         const deleteDiaryBtn = document.getElementById('deleteDiaryBtn');
-        // const editDiaryBtn = document.getElementById('editDiaryBtn');
 
+        if (stars.length > 0) {
+            stars.forEach(star => {
+                star.addEventListener('mouseover', function() {
+                    const rating = this.getAttribute('data-rating');
+                    highlightStars(rating);
+                    ratingValue.textContent = rating;
+                });
+        
+                star.addEventListener('mouseout', function() {
+                    highlightStars(currentMoodScore);
+                    ratingValue.textContent = currentMoodScore || '';
+                });
+        
+                star.addEventListener('click', function() {
+                    currentMoodScore = this.getAttribute('data-rating');
+                    highlightStars(currentMoodScore);
+                    ratingValue.textContent = currentMoodScore;
+                });
+            });
+        } else {
+            console.log('Star rating elements not found');
+        }
+    
+        if (weatherSelect) {
+            weatherSelect.addEventListener('change', function() {
+                currentWeather = this.value;
+            });
+        } else {
+            console.log('Weather select element not found');
+        }
 
-        let currentEntryId = null;
-
-        // 新增：檢查今天的日記
-        function checkTodayDiary() {
-            const token = localStorage.getItem('token');
-            const today = new Date().toISOString().split('T')[0];
-
-            fetch(`/get_diary_entry/${today}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data && data.id) {
-                    // 今天已經有日記
-                    diaryContent.value = data.content;
-                    saveDiaryBtn.textContent = 'UPDATE';
-                    currentEntryId = data.id;
-
-                    // 更新 selectedDiaryContent（如果存在）
-                    const selectedDiaryContent = document.getElementById('selectedDiaryContent');
-                    if (selectedDiaryContent) {
-                        selectedDiaryContent.textContent = data.content;
-                    }
-
-                    // 更新日期顯示（如果有的話）
-                    const selectedDateElement = document.getElementById('selectedDate');
-                    if (selectedDateElement) {
-                        selectedDateElement.textContent = today;
-                    }
-                } else {
-                    // 今天還沒有日記
-                    diaryContent.value = '';
-                    saveDiaryBtn.textContent = 'SAVE';
-                    currentEntryId = null;
-                    
-                    // 清空 selectedDiaryContent（如果存在）
-                    const selectedDiaryContent = document.getElementById('selectedDiaryContent');
-                    if (selectedDiaryContent) {
-                        selectedDiaryContent.textContent = '';
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Error checking today\'s diary:', error);
+        function highlightStars(rating) {
+            const stars = document.querySelectorAll('.star');
+            stars.forEach(star => {
+                star.classList.toggle('active', star.getAttribute('data-rating') <= rating);
             });
         }
 
-        // 加載今天的日記
-        loadDiaryEntry(new Date());
 
-        saveDiaryBtn.addEventListener('click', saveDiaryEntry);
-        function saveDiaryEntry() {
-            const now = Date.now();
-            const timeElapsed = now - lastSaveTime;
+    let currentEntryId = null;
 
-            console.log('Current time:', now);
-            console.log('Last save time:', lastSaveTime);
-            console.log('Time elapsed:', timeElapsed);
+    // 新增：檢查今天的日記
+    function checkTodayDiary() {
+        const token = localStorage.getItem('token');
+        const today = new Date().toISOString().split('T')[0];
 
-            if (timeElapsed < SAVE_COOLDOWN) {
-                const remainingTime = Math.ceil((SAVE_COOLDOWN - timeElapsed) / 1000);
-                console.log('Cooldown active, remaining time:', remainingTime);
-                showMessage(document.querySelector('.fail-message'), `Please wait ${remainingTime} seconds before saving again.`);
-                return;
+        fetch(`/get_diary_entry/${today}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
             }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.id) {
+                // 今天已經有日記
+                diaryContent.value = data.content;
+                saveDiaryBtn.textContent = 'UPDATE';
+                currentEntryId = data.id;
 
-            console.log('Proceeding with save operation');
+                // 更新 selectedDiaryContent（如果存在）
+                const selectedDiaryContent = document.getElementById('selectedDiaryContent');
+                if (selectedDiaryContent) {
+                    selectedDiaryContent.textContent = data.content;
+                }
 
-            // 如果通過冷卻檢查，禁用按鈕
-            saveDiaryBtn.disabled = true;
-
-            const content = diaryContent.value.trim();
-            const token = localStorage.getItem('token');
-            if (!token) {
-                showMessage(document.querySelector('.fail-message'), 'Please sign in first');
-                return;
+                // 更新日期顯示（如果有的話）
+                const selectedDateElement = document.getElementById('selectedDate');
+                if (selectedDateElement) {
+                    selectedDateElement.textContent = today;
+                }
+            } else {
+                // 今天還沒有日記
+                diaryContent.value = '';
+                saveDiaryBtn.textContent = 'SAVE';
+                currentEntryId = null;
+                
+                // 清空 selectedDiaryContent（如果存在）
+                const selectedDiaryContent = document.getElementById('selectedDiaryContent');
+                if (selectedDiaryContent) {
+                    selectedDiaryContent.textContent = '';
+                }
             }
+        })
+        .catch(error => {
+            console.error('Error checking today\'s diary:', error);
+        });
+    }
+    
+    // 加載今天的日記
+    loadDiaryEntry(new Date());
 
-            if (!content) {
-                showMessage(document.querySelector('.fail-message'), 'EMPTY MOODs');
-                saveDiaryBtn.disabled = false;  // 重新啟用按鈕
-                return;
-            }
-            
-            // const today = new Date().toLocaleDateString('en-CA');  // YYYY-MM-DD 格式
-            const selectedDate = document.getElementById('selectedDate').textContent;
-            if (!selectedDate) {
-                showMessage(document.querySelector('.fail-message'), 'No date selected');
-                saveDiaryBtn.disabled = false;  // 重新啟用按鈕
-                return;
-            }
-            
+    saveDiaryBtn.addEventListener('click', saveDiaryEntry);
+    function saveDiaryEntry() {
+        const now = Date.now();
+        const timeElapsed = now - lastSaveTime;
 
-            // 準備要發送的數據
-            const diaryData = {
-                title: "Diary Entry",
-                content: content,
-                date: selectedDate,
-                is_public: false
-            };
+        if (timeElapsed < SAVE_COOLDOWN) {
+            const remainingTime = Math.ceil((SAVE_COOLDOWN - timeElapsed) / 1000);
+            console.log('Cooldown active, remaining time:', remainingTime);
+            showMessage(document.querySelector('.fail-message'), `Please wait ${remainingTime} seconds before saving again.`);
+            return;
+        }
+
+        console.log('Proceeding with save operation');
+
+        // 如果通過冷卻檢查，禁用按鈕
+        saveDiaryBtn.disabled = true;
+
+        const content = diaryContent.value.trim();
+        const token = localStorage.getItem('token');
+        if (!token) {
+            showMessage(document.querySelector('.fail-message'), 'Please sign in first');
+            return;
+        }
+
+        if (!content) {
+            showMessage(document.querySelector('.fail-message'), 'EMPTY MOODs');
+            saveDiaryBtn.disabled = false;  // 重新啟用按鈕
+            return;
+        }
+        
+        // const today = new Date().toLocaleDateString('en-CA');  // YYYY-MM-DD 格式
+        const selectedDate = document.getElementById('selectedDate').textContent;
+        if (!selectedDate) {
+            showMessage(document.querySelector('.fail-message'), 'No date selected');
+            saveDiaryBtn.disabled = false;  // 重新啟用按鈕
+            return;
+        }
+        
+        // 準備要發送的數據
+
+        const moodData = {
+            mood_score: currentMoodScore !== undefined ? currentMoodScore : null,
+            date: selectedDate,
+            weather: currentWeather || null,  // 如果未設置，使用 null
+            note: content
+        };
+        console.log('Saving mood data:', JSON.stringify(moodData, null, 2));
+
+        const diaryData = {
+            title: "Diary Entry",
+            content: content,
+            date: selectedDate,
+            is_public: false
+        };
+
+        // 保存心情數據
+        fetch('/save_mood_entry', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(moodData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to save mood data');
+            }
+            return response.json();
+        })
+        .then(moodResponse => {
+            console.log('Mood data saved successfully:', moodResponse);        
 
             const url = currentEntryId ? `/update_diary_entry/${currentEntryId}` : '/create_diary_entry';
             const method = currentEntryId ? 'PUT' : 'POST';
-        
-            saveDiaryBtn.disabled = true;
-             // 在更新 lastSaveTime 前後添加調試信息
-            console.log('Updating lastSaveTime to:', now);
-            lastSaveTime = now;
-            console.log('Last save time updated:', lastSaveTime);
+    
+        // saveDiaryBtn.disabled = true;
+        // lastSaveTime = now;
 
-            fetch(url, {
+            return fetch(url, {
                 method: method,
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(diaryData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.id) {
-                    showMessage(document.querySelector('.success-message'), 'Diary saved successfully!');
-                    currentEntryId = data.id;
-                    saveDiaryBtn.textContent = 'UPDATE';
-
-                    // 更新顯示的日記內容
-                    diaryContent.value = content;
-
-                    updateCalendar(new Date().getFullYear(), new Date().getMonth() + 1);
-                    loadRecentDiaries();
-
-                } else {
-                    showMessage(document.querySelector('.fail-message'), 'Failed to save. Please try again later.');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showMessage(document.querySelector('.fail-message'), 'An error occurred. Please try again later.');
-            })
-            .finally(() => {
-                // 5秒後重新啟用保存按鈕
-                setTimeout(() => {
-                    saveDiaryBtn.disabled = false;
-                }, SAVE_COOLDOWN);
             });
-        }
-        
-        
-        
-         // 在頁面加載時檢查今天的日記
-        checkTodayDiary();
-        
-        // 在頁面加載時初始化日曆
-        if (isDiaryPage) {
-            console.log('Attempting to generate calendar');
-            const currentDate = new Date();
-            currentYear = currentDate.getFullYear();
-            currentMonth = currentDate.getMonth() + 1; // 注意：getMonth() 返回 0-11
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.id) {
+                showMessage(document.querySelector('.success-message'), 'Diary saved successfully!');
+                currentEntryId = data.id;
+                saveDiaryBtn.textContent = 'UPDATE';
 
-            const prevMonthBtn = document.getElementById('prevMonthBtn');
-            const nextMonthBtn = document.getElementById('nextMonthBtn');
-            const currentMonthYearElem = document.getElementById('currentMonthYear');
+                // 更新顯示的日記內容
+                // diaryContent.value = content;
 
-            function updateMonthYearDisplay(year, month) {
-                currentMonthYearElem.textContent = `${year}Y ${month}M`;
+                updateCalendar(new Date().getFullYear(), new Date().getMonth() + 1);
+                loadRecentDiaries();
+
+            } else {
+                showMessage(document.querySelector('.fail-message'), 'Failed to save. Please try again later.');
             }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showMessage(document.querySelector('.fail-message'), 'An error occurred. Please try again later.');
+        })
+        .finally(() => {
+            // 5秒後重新啟用保存按鈕
+            setTimeout(() => {
+                saveDiaryBtn.disabled = false;
+            }, SAVE_COOLDOWN);
+        });
+    }
     
+
+     // 在頁面加載時檢查今天的日記
+    // checkTodayDiary();
+    
+    // 在頁面加載時初始化日曆
+    if (isDiaryPage) {
+        console.log('Attempting to generate calendar');
+        const currentDate = new Date();
+        currentYear = currentDate.getFullYear();
+        currentMonth = currentDate.getMonth() + 1; // 注意：getMonth() 返回 0-11
+
+        const prevMonthBtn = document.getElementById('prevMonthBtn');
+        const nextMonthBtn = document.getElementById('nextMonthBtn');
+        const currentMonthYearElem = document.getElementById('currentMonthYear');
+
+        function updateMonthYearDisplay(year, month) {
+            currentMonthYearElem.textContent = `${year}Y ${month}M`;
+        }
+
+        generateCalendar(currentYear, currentMonth);
+        updateCalendar(currentYear, currentMonth);
+        loadDiaryEntry(new Date());
+        loadRecentDiaries();
+        updateMonthYearDisplay(currentYear, currentMonth);
+    
+        prevMonthBtn.addEventListener('click', () => {
+            currentMonth--;
+            if (currentMonth < 1) {
+                currentMonth = 12;
+                currentYear--;
+            }
             generateCalendar(currentYear, currentMonth);
             updateCalendar(currentYear, currentMonth);
-            loadDiaryEntry(new Date());
-            loadRecentDiaries();
             updateMonthYearDisplay(currentYear, currentMonth);
-        
-            prevMonthBtn.addEventListener('click', () => {
-                currentMonth--;
-                if (currentMonth < 1) {
-                    currentMonth = 12;
-                    currentYear--;
-                }
-                generateCalendar(currentYear, currentMonth);
-                updateCalendar(currentYear, currentMonth);
-                updateMonthYearDisplay(currentYear, currentMonth);
-            });
+        });
+
+        nextMonthBtn.addEventListener('click', () => {
+            currentMonth++;
+            if (currentMonth > 12) {
+                currentMonth = 1;
+                currentYear++;
+            }
+            generateCalendar(currentYear, currentMonth);
+            updateCalendar(currentYear, currentMonth);
+            updateMonthYearDisplay(currentYear, currentMonth);
+        });
+
+        // if (saveDiaryBtn) {
+        //     saveDiaryBtn.addEventListener('click', saveDiaryEntry);
+        // }
+    }   // 在頁面加載時初始化日曆尾部=============
+
+
+    currentEntryId = null;
+    // let isEditing = false;
+
+    async function loadDiaryEntry(date, entryId = null) {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            showMessage(document.querySelector('.fail-message'), 'PLEASE SIGN IN');
+            return;
+        }
     
-            nextMonthBtn.addEventListener('click', () => {
-                currentMonth++;
-                if (currentMonth > 12) {
-                    currentMonth = 1;
-                    currentYear++;
-                }
-                generateCalendar(currentYear, currentMonth);
-                updateCalendar(currentYear, currentMonth);
-                updateMonthYearDisplay(currentYear, currentMonth);
-            });
-
-            // if (saveDiaryBtn) {
-            //     saveDiaryBtn.addEventListener('click', saveDiaryEntry);
-            // }
-        }   // 在頁面加載時初始化日曆尾部=============
-
-
-        // let currentEntryId = null;
-        // let isEditing = false;
-
-        async function loadDiaryEntry(date, entryId = null) {
-            console.log('Loading diary entry for date:', date);
-            const token = localStorage.getItem('token');
-            if (!token) {
-                showMessage(document.querySelector('.fail-message'), 'PLEASE SIGN IN');
-                return;
+        let param = entryId ? entryId : getFormattedDate(date);
+        let url = `/get_diary_entry/${param}`;
+    
+        fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${token}`
             }
-        
-            let param = entryId ? entryId : getFormattedDate(date);
-            let url = `/get_diary_entry/${param}`;
-        
-            fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
+        })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 404) {
+                    return { notFound: true, date: param };
                 }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    if (response.status === 404) {
-                        return { notFound: true, date: param };
-                    }
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Received diary data:', data);
-                if (data.notFound || (Array.isArray(data) && data.length === 0)) {
-                    console.log('No diary entry found for date:', param);
-                    handleEmptyDiary(param);
-                } else if (Array.isArray(data)) {
-                    handleDiaryEntry(data[0], true);  // 傳入 true 表示直接進入編輯模式
-                } else {
-                    handleDiaryEntry(data, true);  // 傳入 true 表示直接進入編輯模式
-                }
-                updateUIElements();
-            })
-            .catch(error => {
-                console.error('Error loading diary entry:', error);
-                showMessage(document.querySelector('.fail-message'), 'Failed to load diary content');
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.notFound || (Array.isArray(data) && data.length === 0)) {
                 handleEmptyDiary(param);
-                updateUIElements();
-            });
-        }
-        
-        
-        function handleDiaryEntry(entry, editMode = false) {
-            console.log('Handling diary entry:', entry);
-            diaryContent.value = entry.content;            
-            if (selectedDateElement) {
-                selectedDateElement.textContent = entry.date;
-            }
-            currentEntryId = entry.id;
-            if (saveDiaryBtn) {
-                saveDiaryBtn.textContent = 'UPDATE';
-            }
-            isEditing = editMode;
-            diaryContent.readOnly = !editMode;
-        }
-            
-
-        function handleEmptyDiary(date) {
-            console.log('Handling empty diary for date:', date);
-            diaryContent.value = '';
-            if (selectedDateElement) {
-                selectedDateElement.textContent = date;
-                // selectedDateElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-            currentEntryId = null;
-            if (saveDiaryBtn) {
-                saveDiaryBtn.textContent = 'SAVE';
-            }
-            isEditing = true; 
-        }
-
-        async function updateUIElements() {
-            console.log('Updating UI elements...');
-            console.log('Diary content:', diaryContent.value);
-            console.log('Selected date:', selectedDateElement ? selectedDateElement.textContent : 'N/A');
-            console.log('Current entry ID:', currentEntryId);
-            console.log('Save button text:', saveDiaryBtn ? saveDiaryBtn.textContent : 'N/A');
-            console.log('Delete button visibility:', deleteDiaryBtn ? deleteDiaryBtn.style.display : 'N/A');
-
-            // // 確保刪除按鈕的可見性與當前狀態一致
-            // if (deleteDiaryBtn) {
-            //     deleteDiaryBtn.style.display = currentEntryId ? 'inline-block' : 'none';
-            //     console.log('Delete button visibility updated:', deleteDiaryBtn.style.display);
-            // }
-        }
-        
-        // function toggleEdit() {
-        //     console.log('Toggle Edit called. Current state:', isEditing);
-
-        //     if (!isEditing) {
-        //         console.log('Entering edit mode');
-        //         // Enter edit mode
-        //         editDiaryBtn.textContent = 'SAVE';
-        //         selectedDiaryContent.contentEditable = true;
-        //         selectedDiaryContent.focus();
-        //         isEditing = true;
-        //     } else {
-        //         // if (!checkCooldown('save')) {
-        //         //     console.log('Save cooldown not passed');
-        //         //     showMessage(document.querySelector('.fail-message'), 'Please wait before saving again.');
-        //         //     return;
-        //         // }
-        //         console.log('Attempting to save');
-        //         // Save edit
-        //         const content = selectedDiaryContent.textContent.trim();
-        //         const date = selectedDateElement.textContent;
-                
-        //         console.log('Content:', content);
-        //         console.log('Date:', date);
-        //         console.log('Current Entry ID:', currentEntryId);
-
-        //         if (content) {
-        //             let canProceed = checkCooldown('save');
-        //             console.log('Can proceed with save:', canProceed);
-
-        //             if (currentEntryId) {
-        //                 console.log('Updating existing entry');
-        //                 updateDiaryEntry(currentEntryId, content, date);
-        //             } else {
-        //                 console.log('Creating new entry');
-        //                 createNewDiaryEntry(content, date);
-        //             }
-        //             editDiaryBtn.textContent = 'EDIT';
-        //             selectedDiaryContent.contentEditable = false;
-        //             isEditing = false;
-        //         } else {
-        //             console.log('Empty content, not saving');
-        //             showMessage(document.querySelector('.fail-message'), 'EMPTY MOOD');
-        //             // Keep the content area empty and editable if the user didn't input anything
-        //             selectedDiaryContent.textContent = '';
-        //             editDiaryBtn.textContent = 'SAVE';
-        //             selectedDiaryContent.focus();
-        //         }
-        //     }
-        //     console.log('Edit state after toggle:', isEditing);
-
-        // }
-        
-        // editDiaryBtn.addEventListener('click', toggleEdit);
-
-        // function updateDiaryEntry(entryId, content, date) {
-        //     console.log('Updating diary entry:', entryId, content, date);
-        
-        //     const token = localStorage.getItem('token');
-        //     fetch(`/update_diary_entry/${entryId}`, {
-        //         method: 'PUT',
-        //         headers: {
-        //             'Content-Type': 'application/json',
-        //             'Authorization': `Bearer ${token}`
-        //         },
-        //         body: JSON.stringify({
-        //             title: "更新的日記",
-        //             content: content,
-        //             date: date,
-        //             is_public: false,
-        //             image_url: null
-        //         })
-        //     })
-        //     .then(response => response.json())
-        //     .then(data => {
-        //         if (data.id) {
-        //             console.log('Diary updated successfully');
-        //             showMessage(document.querySelector('.success-message'), 'UPDATED SUCCESSFULLY');
-        //             updateCalendar(new Date(date).getFullYear(), new Date(date).getMonth() + 1);
-        //             loadRecentDiaries();
-        //             // 重置冷卻時間
-        //             lastActionTime['save'] = 0;
-        //         } else {
-        //             console.error('Failed to update diary:', data);
-        //             showMessage(document.querySelector('.fail-message'), 'UPDATED FAIL, PLEASE TRY AGAIN LATER');
-        //         }
-        //     })
-        //     .catch(error => {
-        //         console.error('Error updating diary:', error);
-        //         showMessage(document.querySelector('.fail-message'), 'AN ERROR OCCUR, PLEASE TRY AGAIN LATER');
-        //     });
-        // }
-        
-        // function createNewDiaryEntry(content, date) {
-        //     console.log('Creating new diary entry:', content, date);
-
-        //     const token = localStorage.getItem('token');
-
-        //     fetch('/create_diary_entry', {
-        //         method: 'POST',
-        //         headers: {
-        //             'Content-Type': 'application/json',
-        //             'Authorization': `Bearer ${token}`
-        //         },
-        //         body: JSON.stringify({
-        //             title: "新日記",
-        //             content: content,
-        //             date: date,
-        //             is_public: false
-        //         })
-        //     })
-        //     .then(response => response.json())
-        //     .then(data => {
-        //         if (data.id) {
-        //             console.log('New diary created successfully with ID:', data.id);
-        //             showMessage(document.querySelector('.success-message'), 'RECOREDED MOOD SUCCESSFULLY');
-        //             currentEntryId = data.id;
-        //             updateCalendar(new Date(date).getFullYear(), new Date(date).getMonth() + 1);
-        //             loadRecentDiaries();
-        //             deleteDiaryBtn.style.display = 'inline-block'; // 顯示刪除按鈕
-        //         } else {
-        //             console.error('Failed to create new diary:', data);
-        //             showMessage(document.querySelector('.fail-message'), 'CREATED FAIL, PLEASE TRY AGAIN LATER');
-        //         }
-        //     })
-        //     .catch(error => {
-        //         console.error('Error creating new diary:', error);
-        //         showMessage(document.querySelector('.fail-message'), 'AN ERROR OCCUR, PLEASE TRY AGAIN LATER');
-        //     });
-        // }
-        
-
-        // if (editDiaryBtn) {
-        //     editDiaryBtn.addEventListener('click', function() {
-        //         if (!isEditing) {
-        //             // 進入編輯模式
-        //             this.textContent = 'SAVE';
-        //             selectedDiaryContent.contentEditable = true;
-        //             if (selectedDiaryContent.textContent === 'RECORD YOUR MOOD') {
-        //                 selectedDiaryContent.textContent = ''; // 清空預設文字
-        //             }
-        //             selectedDiaryContent.focus();
-        //             isEditing = true;
-        //         } else {
-        //             // 儲存編輯
-        //             this.textContent = 'EDIT';
-        //             selectedDiaryContent.contentEditable = false;
-        //             isEditing = false;
-                    
-        //             const content = selectedDiaryContent.textContent.trim();
-        //             const date = selectedDateElement.textContent;
-        
-        //             if (content) {
-        //                 if (currentEntryId) {
-        //                     updateDiaryEntry(currentEntryId, content, date);
-        //                 } else {
-        //                     createNewDiaryEntry(content, date);
-        //                 }
-        //             } else {
-        //                 showMessage(document.querySelector('.fail-message'), 'EMPTY MOOD');
-        //                 selectedDiaryContent.textContent = 'RECORD YOUR MOOD';
-        //             }
-        //         }
-        //     });
-        // }
-
-        // if (deleteDiaryBtn) {
-        //     deleteDiaryBtn.addEventListener('click', async function() {
-        //         console.log('Delete button clicked');
-        //         if (confirm('Are you sure you want to delete this diary entry? This action cannot be undone.')) {
-        //             console.log('Delete confirmed');
-        //             const token = localStorage.getItem('token');
-        //             if (!token || !currentEntryId) {
-        //                 console.error('Token or currentEntryId is missing');
-        //                 showMessage(document.querySelector('.fail-message'), 'DELETED FAILED, PLEASE TRY AGAIN LATER');
-        //                 return;
-        //             }
-        //             console.log('Deleting entry with ID:', currentEntryId);
-        
-        //             try {
-        //                 const response = await fetch(`/delete_diary_entry/${currentEntryId}`, {
-        //                     method: 'DELETE',
-        //                     headers: {
-        //                         'Authorization': `Bearer ${token}`
-        //                     }
-        //                 });
-        //                 console.log('Delete response status:', response.status);
-                        
-        //                 if (!response.ok) {
-        //                     throw new Error(`HTTP error! status: ${response.status}`);
-        //                 }
-                        
-        //                 const data = await response.json();
-        //                 console.log('Delete operation response:', data);
-                        
-        //                 if (data.message) {
-        //                     console.log('Server response:', data.message);
-        //                     showMessage(document.querySelector('.success-message'), 'Diary entry successfully deleted');
-                            
-        //                     // 重置 UI 元素
-        //                     console.log('Resetting UI elements');
-        //                     diaryContent.value = '';
-        //                     saveDiaryBtn.textContent = 'SAVE';
-        //                     currentEntryId = null;
-        //                     deleteDiaryBtn.style.display = 'none';
-        
-        //                     const currentDate = new Date(document.getElementById('selectedDate').textContent);
-        //                     console.log('Current date:', currentDate);
-        
-        //                     await updateUIElements();
-        //                     console.log('UI elements updated');
-        
-        //                     console.log('Updating calendar...');
-        //                     await updateCalendar(currentDate.getFullYear(), currentDate.getMonth() + 1);
-        //                     console.log('Calendar updated');
-                            
-        //                     console.log('Loading recent diaries...');
-        //                     await loadRecentDiaries();
-        //                     console.log('Recent diaries loaded');
-        
-        //                     console.log('Reloading diary entry for current date');
-        //                     await loadDiaryEntry(currentDate);
-        //                     console.log('Diary entry reloaded');
-        //                 } else {
-        //                     console.error('Delete operation failed:', data);
-        //                     showMessage(document.querySelector('.fail-message'), 'DELETED FAIL, PLEASE TRY AGAIN LATER');
-        //                 }
-        //             } catch (error) {
-        //                 console.error('Error in delete operation:', error);
-        //                 showMessage(document.querySelector('.fail-message'), 'AN ERROR OCCURRED, PLEASE TRY AGAIN LATER');
-        //             }
-        //         } else {
-        //             console.log('Delete cancelled by user');
-        //         }
-        //     });
-        // }
-
-        function getFormattedDate(date) {
-            // 確保使用的是台北時間
-            const taipeiDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
-            
-            // 獲取年、月、日
-            const year = taipeiDate.getFullYear();
-            const month = String(taipeiDate.getMonth() + 1).padStart(2, '0');
-            const day = String(taipeiDate.getDate()).padStart(2, '0');
-            
-            // 格式化日期字符串
-            const formattedDate = `${year}-${month}-${day}`;
-            
-            console.log('Selected date:', date);
-            console.log('Formatted date for API:', formattedDate);
-            
-            return formattedDate;
-            }
-        
-            
-        function generateCalendar(year, month) {
-            console.log('Generating calendar for:', year, month);
-            if (year === undefined || month === undefined) {
-                console.error('Invalid year or month:', year, month);
-                return;
-            }
-            const calendarWall = document.querySelector('.calendar-wall');
-            if (!calendarWall) {
-                console.error('Calendar wall element not found');
-                return;
-            }
-            console.log('Calendar wall element:', calendarWall);
-            calendarWall.innerHTML = '';
-        
-            const date = new Date(year, month - 1, 1); // 月份需要減 1，因為 Date 對象的月份是 0-11
-            const lastDay = new Date(year, month, 0).getDate();
-            const firstDayIndex = date.getDay();
-        
-            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-            const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thr', 'Fri', 'Sat'];
-
-            weekdays.forEach(day => {
-                const dayElement = document.createElement('div');
-                dayElement.classList.add('calendar-day', 'weekday');
-                dayElement.textContent = day;
-                calendarWall.appendChild(dayElement);
-            });
-        
-            // 添加空白天數
-            for (let i = 0; i < firstDayIndex; i++) {
-                const emptyDay = document.createElement('div');
-                emptyDay.classList.add('calendar-day', 'empty');
-                calendarWall.appendChild(emptyDay);
-            }
-        
-            // 添加日期
-            for (let i = 1; i <= lastDay; i++) {
-                const dayElement = document.createElement('div');
-                dayElement.classList.add('calendar-day');
-                
-                const dayContent = document.createElement('div');
-                dayContent.classList.add('calendar-day-content');
-                dayContent.textContent = i;
-                
-                dayElement.appendChild(dayContent);
-                calendarWall.appendChild(dayElement);
-        
-                dayElement.addEventListener('click', () => {
-                    const clickedDate = new Date(year, month - 1, i);
-                    loadDiaryEntry(clickedDate);
-                });
-            }
-            console.log(`日曆生成完成：${year}年${monthNames[month - 1]}，共${lastDay}天`);
-        }
-        
-        async function updateCalendar(year, month) {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                console.log('未找到 token，日曆未更新');
-                return;
-            }
-        
-            fetch('/get_diary_entries', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(entries => {
-                const calendarDays = document.querySelectorAll('.calendar-day');
-                calendarDays.forEach(day => {
-                    const dayNumber = parseInt(day.querySelector('.calendar-day-content')?.textContent);
-                    if (!isNaN(dayNumber)) {
-                        const hasEntry = entries.some(entry => {
-                            const entryDate = new Date(entry.date);
-                            return entryDate.getFullYear() === year &&
-                                    entryDate.getMonth() === month - 1 &&
-                                    entryDate.getDate() === dayNumber;
-                        });
-                        if (hasEntry) {
-                            day.classList.add('has-entry');
-                        } else {
-                            day.classList.remove('has-entry');
-                        }
-                    }
-                });
-            })
-            .catch(error => {
-                console.error('獲取日記條目時出錯：', error);
-            });
-        }
-
-        async function loadRecentDiaries() {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                console.log('No token found, recent diaries not loaded');
-                return;
-            }
-
-            fetch('/get_diary_entries', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(entries => {
-                console.log('Received entries:', entries);
-                recentDiariesContainer.innerHTML = ''; // 清空現有內容
-                entries.slice(0, 5).forEach(entry => { // 只顯示最近5篇
-                    const entryElement = document.createElement('div');
-                    entryElement.classList.add('recent-diary-entry');
-                    entryElement.innerHTML = `
-                    <div class="entry-content">
-                        <h3>${entry.date}</h3>
-                        <p>${entry.content.substring(0, 100)}${entry.content.length > 100 ? '...' : ''}</p>
-                    </div>
-                    <button class="delete-entry-btn" data-id="${entry.id}">DELETE</button>
-                `;
-                entryElement.addEventListener('click', function(e) {
-                    if (!e.target.classList.contains('delete-entry-btn')) {
-                        loadDiaryEntry(new Date(entry.date), entry.id);
-                    }
-                });
-                recentDiariesContainer.appendChild(entryElement);
-            });
-            // 為每個刪除按鈕添加事件監聽器
-            document.querySelectorAll('.delete-entry-btn').forEach(button => {
-                button.addEventListener('click', function() {
-                    const entryId = this.getAttribute('data-id');
-                    deleteDiaryEntry(entryId);
-                    });
-                });
-            })
-            .catch(error => {
-                console.error('Error fetching recent diary entries:', error);
-            });
-        }
-
-        
-        async function deleteDiaryEntry(entryId) {
-            console.log('Deleting diary entry with ID:', entryId);
-
-            const now = Date.now();
-            const timeElapsed = now - lastDeleteTime;
-
-            if (timeElapsed < DELETE_COOLDOWN) {
-                const remainingTime = Math.ceil((DELETE_COOLDOWN - timeElapsed) / 1000);
-                showMessage(document.querySelector('.fail-message'), `Please wait ${remainingTime} seconds before deleting again.`);
-                return;
-            }
-
-            if (confirm('Are you sure you want to delete this diary entry? This action cannot be undone.')) {
-                const token = localStorage.getItem('token');
-                if (!token) {
-                    showMessage(document.querySelector('.fail-message'), 'DELETED FAIL');
-                    return;
-                }
-
-                // 禁用所有刪除按鈕
-                const deleteButtons = document.querySelectorAll('.delete-entry-btn');
-                deleteButtons.forEach(button => button.disabled = true);
-
-                lastDeleteTime = now; // 更新最後刪除時間
-
-                try {
-                    console.log('Sending delete request for entry ID:', entryId);
-
-                    const response = await fetch(`/delete_diary_entry/${entryId}`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-        
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-        
-                    const data = await response.json();
-                    if (data.message) {
-                        showMessage(document.querySelector('.success-message'), 'Diary entry successfully deleted');
-                        
-                        await loadRecentDiaries(); // 重新載入最近的日記列表
-                        await updateCalendar(new Date().getFullYear(), new Date().getMonth() + 1); // 更新日曆
-                        
-                        // 如果刪除的是當前顯示的日記，清空內容並更新 UI
-
-                        console.log('Resetting UI after deletion');
-                        diaryContent.value = '';
-                        saveDiaryBtn.textContent = 'SAVE';
-                        currentEntryId = null; // 重要：重置 currentEntryId
-
-                        updateUIElements();
-                        }
-                } catch (error) {
-                    console.error('Error in delete operation:', error);
-                    showMessage(document.querySelector('.fail-message'), 'AN ERROR OCCURRED, PLEASE TRY AGAIN LATER');
-                } finally {
-                    console.log('Re-enabling delete buttons after cooldown');
-                    // 5秒後重新啟用所有刪除按鈕
-                    setTimeout(() => {
-                        deleteButtons.forEach(button => button.disabled = false);
-                        console.log('Delete buttons re-enabled');
-                    }, DELETE_COOLDOWN);
-                }
+                resetMoodUI();
+                // resetDiaryContent();  // 新增：重置日記內容
             } else {
-                console.log('Delete cancelled by user');
+                const entry = Array.isArray(data) ? data[0] : data;
+                handleDiaryEntry(entry, true);  // 傳入 true 表示直接進入編輯模式
+                if (entry.mood_data) {
+                    currentMoodScore = entry.mood_data.mood_score || 0;
+                    currentWeather = entry.mood_data.weather || '';
+                    updateMoodUI();
+                } else {
+                    resetMoodUI();
+                }
             }
+            updateUIElements();
+        })
+        .catch(error => {
+            console.error('Error loading diary entry:', error);
+            showMessage(document.querySelector('.fail-message'), 'Failed to load diary content');
+            handleEmptyDiary(param);
+            resetMoodUI();
+            updateUIElements();
+        });
+    }
+    
+    
+    function handleDiaryEntry(entry, editMode = false) {
+        diaryContent.value = entry.content;            
+        if (selectedDateElement) {
+            selectedDateElement.textContent = entry.date;
         }
-
-        loadDiaryEntry(new Date());
-        loadRecentDiaries(); // 頁面加載時載入最近的日記
-
+        currentEntryId = entry.id;
+        if (saveDiaryBtn) {
+            saveDiaryBtn.textContent = 'UPDATE';
+        }
+        isEditing = editMode;
+        diaryContent.readOnly = !editMode;
+    }
         
-    } // 只在 diary.html 頁面執行的代碼尾部=========================
 
-    function showMessage(element, message, delay = 0) {
-        console.log('Showing message:', message); // 添加日誌
-        setTimeout(() => {
-            if (element) {
-                const translations = {
-                    '登入失敗，帳號或密碼錯誤或其他原因': 'You have entered an invalid username or password',
-                    '註冊失敗，重複的 Email 或其他原因': 'Registration failed, please check email and password'
-                };
-                element.textContent = translations[message] || message;
-                element.style.display = 'block';
-                console.log('Message displayed:', element.textContent); // 添加日誌
-                setTimeout(() => {
-                    element.style.display = 'none';
-                    console.log('Message hidden'); // 添加日誌
-                }, 3000);
-            } else {
-                console.error('Message element not found:', message);
-            }
-        }, delay);
+    function handleEmptyDiary(date) {
+        diaryContent.value = '';
+        if (selectedDateElement) {
+            selectedDateElement.textContent = date;
+            // selectedDateElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        currentEntryId = null;
+        if (saveDiaryBtn) {
+            saveDiaryBtn.textContent = 'SAVE';
+        }
+        isEditing = true; 
     }
 
-    //========================= match js =================================//
-    // 立即執行的登錄檢查
-    (function() {
-        const isLoggedIn = !!localStorage.getItem('token');
-        const isMatchPage = window.location.pathname.includes('match.html');
-        
-        if (isMatchPage && !isLoggedIn) {
-            window.location.href = '/static/index.html';
-        }
-    })();
-
-    //只在exchangeBtn頁執行websocsket========
-
-    function initializeMatchPage() {
-        const exchangeBtn = document.getElementById('exchangeBtn');
-        console.log('Initializing match page');
-        if (exchangeBtn) {
-            if (localStorage.getItem('token') && localStorage.getItem('user_id')) {
-                connectWebSocket();
-            }
-            exchangeBtn.addEventListener('click', handleExchangeRequest);
-            checkPendingRequests();
-        }
-        checkMatchStatus(); // 初始檢查
-        // setInterval(checkMatchStatus, 60000); // 每分鐘檢查一次
+    async function updateUIElements() {
+        console.log('Updating UI elements...');
+        console.log('Diary content:', diaryContent.value);
+        console.log('Selected date:', selectedDateElement ? selectedDateElement.textContent : 'N/A');
+        console.log('Current entry ID:', currentEntryId);
+        console.log('Save button text:', saveDiaryBtn ? saveDiaryBtn.textContent : 'N/A');
+        console.log('Delete button visibility:', deleteDiaryBtn ? deleteDiaryBtn.style.display : 'N/A');
     }
 
-    // 定義 handleExchangeRequest 函數
-    async function handleExchangeRequest() {
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetch('/matching/request_exchange', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-            });
+    function loadMoodData(date) {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.log('No token found, mood data not loaded');
+            return;
+        }
+        console.log('Fetching mood data for date:', date);  // 新增
+
+        fetch(`/get_diary_entry/${date}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        })
+        .then(response => {
+            console.log('Response status:', response.status);  // 新增
+
+            if (!response.ok) {
+                if (response.status === 404) {
+                    console.log('Mood data not found for date:', date);  // 新增
+
+                    return null;  // 沒有找到心情數據
+                }
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Received mood data:', data);  // 新增
+
+            if (data && data.length > 0 && data[0].mood_data) {
+                currentMoodScore = data[0].mood_data.mood_score || 0;
+                currentWeather = data[0].mood_data.weather || '';
+    
+                updateMoodUI();
+            } else {
+                console.log('Resetting mood UI due to invalid data');  // 新增
+
+                resetMoodUI();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading mood data:', error);
+            resetMoodUI();
+        });
+    }
+    
+    // 更新心情 UI 的函數
+    function updateMoodUI() {
+        if (stars && stars.length > 0) {
+            highlightStars(currentMoodScore);
+        }
+        if (ratingValue) {
+            ratingValue.textContent = currentMoodScore !== undefined ? currentMoodScore : '';
+        }
+        if (weatherSelect) {
+            weatherSelect.value = currentWeather || '';
+        }
+    }
+    
+    // 重置心情 UI 的函數
+    function resetMoodUI() {
+        currentMoodScore = undefined;
+        currentWeather = null;
+        if (stars && stars.length > 0) {
+            highlightStars(0);
+        }
+        if (ratingValue) {
+            ratingValue.textContent = '';
+        }
+        if (weatherSelect) {
+            weatherSelect.value = '';
+        }
+    }
+    
+    function highlightStars(score) {
+        const stars = document.querySelectorAll('.star');
+        stars.forEach((star, index) => {
+            if (index < score) {
+                star.classList.add('active');
+            } else {
+                star.classList.remove('active');
+            }
+        });
+    }
+   
+
+    function getFormattedDate(date) {
+        // 確保使用的是台北時間
+        const taipeiDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+        
+        // 獲取年、月、日
+        const year = taipeiDate.getFullYear();
+        const month = String(taipeiDate.getMonth() + 1).padStart(2, '0');
+        const day = String(taipeiDate.getDate()).padStart(2, '0');
+        
+        // 格式化日期字符串
+        const formattedDate = `${year}-${month}-${day}`;
+        
+        console.log('Selected date:', date);
+        console.log('Formatted date for API:', formattedDate);
+        
+        return formattedDate;
+        }
+    
+        
+    function generateCalendar(year, month) {
+        if (year === undefined || month === undefined) {
+            console.error('Invalid year or month:', year, month);
+            return;
+        }
+        const calendarWall = document.querySelector('.calendar-wall');
+        if (!calendarWall) {
+            console.error('Calendar wall element not found');
+            return;
+        }
+        calendarWall.innerHTML = '';
+    
+        const date = new Date(year, month - 1, 1); // 月份需要減 1，因為 Date 對象的月份是 0-11
+        const lastDay = new Date(year, month, 0).getDate();
+        const firstDayIndex = date.getDay();
+    
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thr', 'Fri', 'Sat'];
+
+        weekdays.forEach(day => {
+            const dayElement = document.createElement('div');
+            dayElement.classList.add('calendar-day', 'weekday');
+            dayElement.textContent = day;
+            calendarWall.appendChild(dayElement);
+        });
+        // 添加空白天數
+        for (let i = 0; i < firstDayIndex; i++) {
+            const emptyDay = document.createElement('div');
+            emptyDay.classList.add('calendar-day', 'empty');
+            calendarWall.appendChild(emptyDay);
+        }
+    
+        // 添加日期
+        for (let i = 1; i <= lastDay; i++) {
+            const dayElement = document.createElement('div');
+            dayElement.classList.add('calendar-day');
             
+            const dayContent = document.createElement('div');
+            dayContent.classList.add('calendar-day-content');
+            dayContent.textContent = i;
+            
+            dayElement.appendChild(dayContent);
+            calendarWall.appendChild(dayElement);
+    
+            dayElement.addEventListener('click', () => {
+                const clickedDate = new Date(year, month - 1, i);
+                loadDiaryEntry(clickedDate);
+            });
+        }
+    }
+    
+    async function updateCalendar(year, month) {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.log('未找到 token，日曆未更新');
+            return;
+        }
+    
+        fetch('/get_diary_entries', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        })
+        .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            
-            const data = await response.json();
-            
-            if (!data) {
-                throw new Error('No data received from server');
-            }
-            
-            if (data.status === 'success') {
-                showNotification('Your match request is on its way!');
-                checkMatchStatus();
-            } else if (data.status === 'pending') {
-                showNotification('A new diary buddy is waiting!');
-            } else {
-                showNotification(data.message || 'Unknown status received');
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            if (error.response) {
-                console.error('Error response:', await error.response.text());
-            }        
-            showNotification('An error occurred, please try again later.');
-        }
-    }
-    const partnerDiaryContent = document.getElementById('partnerDiaryContent');
-    async function checkMatchStatus() {
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetch('/matching/status', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
+            return response.json();
+        })
+        .then(entries => {
+            const calendarDays = document.querySelectorAll('.calendar-day');
+            calendarDays.forEach(day => {
+                const dayNumber = parseInt(day.querySelector('.calendar-day-content')?.textContent);
+                if (!isNaN(dayNumber)) {
+                    const hasEntry = entries.some(entry => {
+                        const entryDate = new Date(entry.date);
+                        return entryDate.getFullYear() === year &&
+                                entryDate.getMonth() === month - 1 &&
+                                entryDate.getDate() === dayNumber;
+                    });
+                    if (hasEntry) {
+                        day.classList.add('has-entry');
+                    } else {
+                        day.classList.remove('has-entry');
+                    }
                 }
             });
-
-            const data = await response.json();
-            console.log('Match status response:', data);
-
-            switch(data.status) {
-                case 'accepted':
-                    console.log(`Match accepted with partner Name: ${data.partner_name}`);
-                    if (currentPartnerId !== data.partner_id) {
-                        currentPartnerId = data.partner_id;
-                        showNotification(`You've been matched with ${data.partner_name}!`);
-                    }
-                    await loadPartnerDiary(data.partner_id);
-                    break;
-                case 'pending':
-                    console.log('Match status is pending, will check again in 5 seconds');
-                    if (partnerDiaryContent) {
-                        partnerDiaryContent.innerHTML = `<p>${data.message}</p>`;
-                    }
-                    // setTimeout(checkMatchStatus, 60000); // 每60秒檢查一次
-                    break;
-                case 'partner_repairing':
-                    console.log('Partner is repairing');
-                    if (partnerDiaryContent) {
-                        partnerDiaryContent.innerHTML = `<p>${data.message}</p>`;
-                    }
-                    // setTimeout(checkMatchStatus, 60000); // 每60秒檢查一次
-                    break;
-                case 'no_match':
-                default:
-                    console.log('No active match or unknown status');
-                    currentPartnerId = null;
-                    if (partnerDiaryContent) {
-                        partnerDiaryContent.innerHTML = `<p>${data.message || 'No partner matched yet. Click EXCHANGE to find a diary buddy!'}</p>`;
-                    }
-                    break;
-            }
-        } catch (error) {
-            console.error('Error in checkMatchStatus:', error);
-            showNotification('An error occurred while checking match status.');
-        }
+        })
+        .catch(error => {
+            console.error('獲取日記條目時出錯：', error);
+        });
     }
 
-    async function loadPartnerDiary(partnerId) {
-        console.log(`Attempting to load partner diary for partner ID: ${partnerId}`);
+    async function loadRecentDiaries() {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.log('No token found, recent diaries not loaded');
+            return;
+        }
 
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`/get_partner_diary/${partnerId}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            console.log('Response status:', response.status);
-            console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-
-            const responseText = await response.text();
-            console.log('Response text:', responseText);
-
-            let errorData;
-            try {
-                errorData = JSON.parse(responseText);
-            } catch (e) {
-                console.error('Error parsing JSON:', e);
-                errorData = { detail: 'Unable to parse error response' };
+        fetch('/get_diary_entries', {
+            headers: {
+                'Authorization': `Bearer ${token}`
             }
-
+        })
+        .then(response => {
             if (!response.ok) {
-                console.error('Server error response:', errorData);
-                
-                if (response.status === 403) {
-                    showNotification(errorData.detail || "You are no longer matched with this user");
-                    currentPartnerId = null;
-                    checkMatchStatus();
-                    return; // 提前返回，不要繼續處理
-                } else {
-                    showNotification(errorData.detail || 'An error occurred while loading partner diary');
-                    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-                }
-            }    
-
-            const data = errorData; // 因為我們已經解析了 JSON
-            console.log('Partner diary data:', data);
-
-            if (!partnerDiaryContent) {
-                console.error('Partner diary content element not found');
-                throw new Error('UI element for partner diary not found');
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-
-            partnerDiaryContent.innerHTML = ''; // 清空現有內容
-    
-            if (data.length > 0) {
-                data.forEach(entry => {
-                    const entryElement = document.createElement('div');
-                    entryElement.classList.add('partnerdiary-entry');
-                    entryElement.innerHTML = `
-                    <div class="partnerdiary-entry">
-                        <div class="moodsDate">${entry.date}</div>
-                        <div class="partnerdiary-content">
-                            <p>${entry.content}</p>
-                        </div>
-                    </div>
-                    `;
-                    partnerDiaryContent.appendChild(entryElement);
-                });
-                console.log(`Rendered ${data.length} diary entries`);
-
-            } else {
-                partnerDiaryContent.innerHTML = '<p>Your partner has not written any diaries yet.</p>';
-                console.log('No diary entries found for partner');
-            }
-        } catch (error) {
-            console.error('Error loading partner diary:', error);
-            console.error('Error stack:', error.stack);
-            const errorMessage = error.message || 'Failed to load partner diary';
-            showNotification(`Error: ${errorMessage}. Please try again later.`);
-            
-            if (partnerDiaryContent) {
-                partnerDiaryContent.innerHTML = `<p>Error: ${errorMessage}</p>`;
-            }
-        }
-    }
-    
-
-        // 建立WebSocket連接
-        
-    function connectWebSocket() {
-        const userId = localStorage.getItem('user_id');
-        if (!userId) {
-            console.error('User ID not found. Unable to establish WebSocket connection.');
-            return;
-        }
-    
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${wsProtocol}//${window.location.host}/ws/${userId}`;
-        const ws = new WebSocket(wsUrl);
-    
-        ws.onopen = function() {
-            console.log('WebSocket connection established');
-        };
-    
-        ws.onmessage = function(event) {
-            const message = event.data;
-            showNotification(message);
-        };
-    
-        ws.onerror = function(error) {
-            console.error('WebSocket error:', error);
-        };
-    
-        ws.onclose = function(event) {
-            console.log('WebSocket connection closed:', event);
-        };
-    
-        // 將 WebSocket 實例存儲在全局變量中，以便在其他地方使用
-        window.matchWebSocket = ws;
-    }
-        
-    // 顯示通知的函數
-    function showNotification(message) {
-        const notification = document.createElement('div');
-        notification.className = 'notification';
-        notification.textContent = message;
-        document.body.appendChild(notification);
-        setTimeout(() => {
-            notification.remove();
-        }, 3000);
-    }
-
-    // 在頁面加載時檢查是否有待處理的配對請求
-    async function checkPendingRequests() {
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetch('/matching/requests', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            const requests = await response.json();
-            requests.forEach(request => {
-                showMatchRequestNotification(request);
-            });
-        } catch (error) {
-            console.error('Error:', error);
-        }
-    }
-
-    function showMatchRequestNotification(request) {
-        console.log('Showing notification for request:', request); // 添加日誌
-        if (!request || !request.requester_id) {
-            console.error('Invalid request object:', request);
-            return;
-        }
-        const notification = document.createElement('div');
-        notification.className = 'match-request-notification';
-        notification.innerHTML = `
-            <p>You have a new match with "${request.user_name || 'SECRET'}" </p>
-            <button class="accept-btn" data-requester-id="${request.requester_id}">ACCEPT</button>
-            <button class="reject-btn" data-requester-id="${request.requester_id}">DENY</button>
+            return response.json();
+        })
+        .then(entries => {
+            console.log('Received entries:', entries);
+            recentDiariesContainer.innerHTML = ''; // 清空現有內容
+            entries.slice(0, 5).forEach(entry => { // 只顯示最近5篇
+                const entryElement = document.createElement('div');
+                entryElement.classList.add('recent-diary-entry');
+                entryElement.innerHTML = `
+                <div class="entry-content">
+                    <h3>${entry.date}</h3>
+                    <p>${entry.content.substring(0, 100)}${entry.content.length > 100 ? '...' : ''}</p>
+                </div>
+                <button class="delete-entry-btn" data-id="${entry.id}">DELETE</button>
             `;
-
-        const acceptBtn = notification.querySelector('.accept-btn');
-        const rejectBtn = notification.querySelector('.reject-btn');
-        
-        acceptBtn.addEventListener('click', function() {
-            const requesterId = this.getAttribute('data-requester-id');
-            console.log('Rejecting request from requester:', requesterId);
-            respondToMatchRequest(requesterId, 'accept');
+            entryElement.addEventListener('click', function(e) {
+                if (!e.target.classList.contains('delete-entry-btn')) {
+                    loadDiaryEntry(new Date(entry.date), entry.id);
+                }
+            });
+            recentDiariesContainer.appendChild(entryElement);
         });
-    
-        rejectBtn.addEventListener('click', function() {
-            const requesterId = this.getAttribute('data-requester-id');
-            console.log('Rejecting request from requester:', requesterId);
-            respondToMatchRequest(requesterId, 'reject');
+        // 為每個刪除按鈕添加事件監聽器
+        document.querySelectorAll('.delete-entry-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const entryId = this.getAttribute('data-id');
+                deleteDiaryEntry(entryId);
+                });
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching recent diary entries:', error);
         });
-    
-
-        document.body.appendChild(notification);
     }
 
-    async function respondToMatchRequest(requesterId, action) {
-        console.log(`Responding to request from user ${requesterId} with action ${action}`);
-        try {
+    
+    async function deleteDiaryEntry(entryId) {
+        console.log('Deleting diary entry with ID:', entryId);
+
+        const now = Date.now();
+        const timeElapsed = now - lastDeleteTime;
+
+        if (timeElapsed < DELETE_COOLDOWN) {
+            const remainingTime = Math.ceil((DELETE_COOLDOWN - timeElapsed) / 1000);
+            showMessage(document.querySelector('.fail-message'), `Please wait ${remainingTime} seconds before deleting again.`);
+            return;
+        }
+
+        if (confirm('Are you sure you want to delete this diary entry? This action cannot be undone.')) {
             const token = localStorage.getItem('token');
-            const response = await fetch(`/matching/respond/${requesterId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ action: action })
-            });
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+            if (!token) {
+                showMessage(document.querySelector('.fail-message'), 'DELETED FAIL');
+                return;
             }
 
-            const data = await response.json();
-            console.log('Response data:', data);
-            showNotification(data.message);
-             // 關閉 WebSocket 連接
-            if (window.matchWebSocket) {
-                window.matchWebSocket.close();
-            }
+            // 禁用所有刪除按鈕
+            const deleteButtons = document.querySelectorAll('.delete-entry-btn');
+            deleteButtons.forEach(button => button.disabled = true);
 
-            // 移除通知元素
-            const notification = document.querySelector('.match-request-notification');
-            if (notification) {
-                notification.remove();
+            lastDeleteTime = now; // 更新最後刪除時間
+
+            try {
+                console.log('Sending delete request for entry ID:', entryId);
+
+                const response = await fetch(`/delete_diary_entry/${entryId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+    
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+    
+                const data = await response.json();
+                if (data.message) {
+                    showMessage(document.querySelector('.success-message'), 'Diary entry successfully deleted');
+                    
+                    await loadRecentDiaries(); // 重新載入最近的日記列表
+                    await updateCalendar(new Date().getFullYear(), new Date().getMonth() + 1); // 更新日曆
+                    
+                    // 如果刪除的是當前顯示的日記，清空內容並更新 UI
+
+                    diaryContent.value = '';
+                    saveDiaryBtn.textContent = 'SAVE';
+                    currentEntryId = null; // 重要：重置 currentEntryId
+
+                    updateUIElements();
+                    }
+            } catch (error) {
+                console.error('Error in delete operation:', error);
+                showMessage(document.querySelector('.fail-message'), 'AN ERROR OCCURRED, PLEASE TRY AGAIN LATER');
+            } finally {
+                console.log('Re-enabling delete buttons after cooldown');
+                // 5秒後重新啟用所有刪除按鈕
+                setTimeout(() => {
+                    deleteButtons.forEach(button => button.disabled = false);
+                    console.log('Delete buttons re-enabled');
+                }, DELETE_COOLDOWN);
             }
-            // 如果接受了匹配請求，立即刷新匹配狀態和夥伴日記
-            if (action === 'accept') {
-                await checkMatchStatus();
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            showNotification('MATCH SYSTEM ERROR，PLEASE TRY AGAIN LATER。');
+        } else {
+            console.log('Delete cancelled by user');
         }
     }
 
+    loadDiaryEntry(new Date());
+    loadRecentDiaries(); // 頁面加載時載入最近的日記
+
+    
+} // 只在 diary.html 頁面執行的代碼尾部=========================
+
+function showMessage(element, message, delay = 0) {
+    console.log('Showing message:', message); // 添加日誌
+    setTimeout(() => {
+        if (element) {
+            const translations = {
+                '登入失敗，帳號或密碼錯誤或其他原因': 'You have entered an invalid username or password',
+                '註冊失敗，重複的 Email 或其他原因': 'Registration failed, please check email and password'
+            };
+            element.textContent = translations[message] || message;
+            element.style.display = 'block';
+            console.log('Message displayed:', element.textContent); // 添加日誌
+            setTimeout(() => {
+                element.style.display = 'none';
+                console.log('Message hidden'); // 添加日誌
+            }, 3000);
+        } else {
+            console.error('Message element not found:', message);
+        }
+    }, delay);
+}
 
 }); //DOM尾部==========================
-
 
 // jQuery 代碼
 $(document).ready(function () {

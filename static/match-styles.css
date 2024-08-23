@@ -36,6 +36,20 @@ body {
     margin: 0 auto;
 
 }
+.user-avatar {
+    width: 32px;
+    border-radius: 50%;
+    background-color: #234064e0;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    display: none;
+  }
+#loginBtn {
+margin-left: 10px;
+}
 
 .title {
     color: rgba(68, 136, 153, 1);
@@ -43,7 +57,6 @@ body {
     font-weight: bold;
     cursor: pointer;
 }
-
 .title-moodsexchange {
     color: rgba(68, 136, 153, 1);
     font-size: 20px;
@@ -55,6 +68,13 @@ body {
 
 .title-moodsexchange:hover {
     text-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
+}
+
+.buttons {
+    display: flex;
+    height: 34px;
+    color: rgba(68, 136, 153, 1);
+    cursor: pointer;
 }
 
 .booking-btn {
@@ -147,6 +167,19 @@ body {
     box-sizing: border-box;
 }
 
+.partner-name {
+    width: 32px;
+    border-radius: 50%;
+    background-color: #20354fd1;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    margin-left: 20px;
+    cursor: pointer;
+}
+
 .partnerdiary-entry {
     background: rgba(128, 128, 128, 0.3);
     backdrop-filter: blur(45px);
@@ -162,6 +195,7 @@ body {
     font-weight: bold;
     padding: 15px;
     color: rgba(68, 136, 153, 1);
+    display: flex;
 }
 
 #selectedDate {
@@ -170,6 +204,12 @@ body {
 
 .entry-content {
     margin-bottom: 10px;
+}
+
+.delete-entry-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
 }
 
 .selected-diary {
@@ -398,6 +438,7 @@ a {
     border-radius: 15px;
     cursor: pointer;
     transition: all 0.3s ease;
+    position: relative;
 }
 
 .recent-diary-entry:hover {

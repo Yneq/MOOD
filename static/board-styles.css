@@ -32,10 +32,46 @@ body {
     box-sizing: border-box;
 }
 
+
+.user-avatar {
+    width: 32px;
+    border-radius: 50%;
+    background-color: #234064e0;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    display: none;
+}
+#loginBtn {
+margin-left: 10px;
+}
+
 .title {
     color: rgba(68, 136, 153, 1);
     font-size: 30px;
     font-weight: bold;
+    cursor: pointer;
+}
+
+.title-moodsexchange {
+    color: rgba(68, 136, 153, 1);
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;;
+}
+
+.title-moodsexchange:hover {
+    text-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
+}
+
+.buttons {
+    display: flex;
+    height: 34px;
+    color: rgba(68, 136, 153, 1);
     cursor: pointer;
 }
 
@@ -126,6 +162,55 @@ button:hover {
     max-width: 100%;
     max-height: 300px;
 }
+
+
+.message-footer {
+    display: flex;
+    align-items: center;
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+}
+
+.like-button,
+.like-count {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.message:hover .like-button,
+.message:hover .like-count,
+.like-button.liked,
+.like-button.liked + .like-count {
+    opacity: 1;
+}
+
+.like-button {
+    position: absolute;
+    bottom: -3px;
+    right: -18px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.like-button:hover {
+    transform: scale(1.2);
+    background: none;
+}
+
+.like-button.liked {
+    color: red;
+}
+
+.like-count {
+    position: absolute;
+    bottom: 0px;
+    right: 15px;
+}
+
 
 /* 隱藏原始的文件選擇按鈕 */
 #imageInput {
@@ -356,3 +441,4 @@ a {
         margin-top: 10px;
     }
 }
+
