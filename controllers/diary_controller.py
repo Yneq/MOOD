@@ -11,9 +11,10 @@ from botocore.config import Config
 from fastapi.encoders import jsonable_encoder
 from datetime import datetime, date
 from typing import List, Dict, Union
-from models.diary import PresigneUrlRequest, DiaryEntryResponse, DiaryEntryRequest, MoodEntryRequest, MoodEntryResponse, MoodData
+from models.diary import PresigneUrlRequest, DiaryEntryResponse, DiaryEntryRequest, MoodEntryRequest, MoodEntryResponse, MoodData, ProfileUpdateRequest
 from dependencies import get_db, get_current_user
 import pytz
+
 
 # 設置日誌記錄
 import logging
@@ -24,15 +25,23 @@ router = APIRouter()
 
 load_dotenv()
 
-# S3 客戶端設置
-s3_client = boto3.client("s3", 
-                        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-                        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-                        region_name=os.getenv("AWS_REGION"),
-                        config=Config(signature_version="s3v4"))
+# # S3 客戶端設置
+# s3_client = boto3.client("s3", 
+#                         aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+#                         aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+#                         region_name=os.getenv("AWS_REGION"),
+#                         config=Config(signature_version="s3v4"))
 
-BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
-CLOUDFRONT_DOMAIN = os.getenv("CLOUDFRONT_DOMAIN")
+# BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
+# CLOUDFRONT_DOMAIN = os.getenv("CLOUDFRONT_DOMAIN")
+
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
 
 # 設置時區
 taipei_tz = pytz.timezone('Asia/Taipei')
@@ -50,21 +59,21 @@ def convert_date_to_isoformat(date_value):
     return str(date_value)
 
 
-@router.post("/get_presigned_url")
-async def get_presigned_url(request: PresigneUrlRequest):
-    try:
-        file_key = str(uuid.uuid4()) + "_" + request.filename
-        presigned_url = s3_client.generate_presigned_url(
-            'put_object',
-            Params={'Bucket': BUCKET_NAME, 'Key': file_key},
-            ExpiresIn=3600,
-            HttpMethod='PUT'
-        )
-        cloudfront_url = f"{CLOUDFRONT_DOMAIN}/{file_key}"
-        return JSONResponse(content={'url': presigned_url, 'key': file_key, 'cloudfront_url': cloudfront_url})
-    except Exception as e:
-        logger.error(f"Error generating presigned URL: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error generating presigned URL: {str(e)}")
+# @router.post("/get_presigned_url")
+# async def get_presigned_url(request: PresigneUrlRequest):
+#     try:
+#         file_key = str(uuid.uuid4()) + "_" + request.filename
+#         presigned_url = s3_client.generate_presigned_url(
+#             'put_object',
+#             Params={'Bucket': BUCKET_NAME, 'Key': file_key},
+#             ExpiresIn=3600,
+#             HttpMethod='PUT'
+#         )
+#         cloudfront_url = f"{CLOUDFRONT_DOMAIN}/{file_key}"
+#         return JSONResponse(content={'url': presigned_url, 'key': file_key, 'cloudfront_url': cloudfront_url})
+#     except Exception as e:
+#         logger.error(f"Error generating presigned URL: {str(e)}", exc_info=True)
+#         raise HTTPException(status_code=500, detail=f"Error generating presigned URL: {str(e)}")
 
 @router.get("/get_diary_entries", response_model=List[DiaryEntryResponse])
 async def get_diary_entries(
@@ -96,8 +105,6 @@ async def get_diary_entries(
         if cursor:
             cursor.close()
 
-
-taipei_tz = pytz.timezone('Asia/Taipei')
 
 @router.get("/get_diary_entry/{param}", response_model=Union[List[DiaryEntryResponse], DiaryEntryResponse])
 async def get_diary_entry(
@@ -463,3 +470,95 @@ async def save_mood_entry(
         if cursor:
             cursor.close()
 
+
+
+@router.post("/update_profile")
+async def update_profile(
+    request: ProfileUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+    db: mysql.connector.connection.MySQLConnection = Depends(get_db)
+):
+    cursor = None
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        update_fields = []
+        update_values = []
+
+        if request.avatar_url:
+            update_fields.append("avatar_url = %s")
+            update_values.append(request.avatar_url)
+
+        if request.new_password and request.new_password.strip():
+            if not request.current_password:
+                raise HTTPException(status_code=400, detail="當前密碼必須提供")
+
+            cursor.execute("SELECT password FROM users WHERE id = %s", (current_user['id'],))
+            user = cursor.fetchone()
+            if not user:
+                raise HTTPException(status_code=404, detail="用戶不存在")
+            
+            if request.current_password != user['password']:
+                raise HTTPException(status_code=400, detail="當前密碼不正確")
+            
+            update_fields.append("password = %s")
+            update_values.append(request.new_password)
+
+            if request.avatar_url:
+                update_fields.append("avatar_url = %s")
+                update_values.append(request.avatar_url)
+        
+
+        if update_fields:
+            query = f"UPDATE users SET {', '.join(update_fields)} WHERE id = %s"
+            update_values.append(current_user['id'])
+            cursor.execute(query, tuple(update_values))
+            db.commit()
+
+            cursor.execute("SELECT avatar_url FROM users WHERE id = %s", (current_user['id'],))
+            updated_user = cursor.fetchone()
+            
+            logger.info(f"User {current_user['id']} updated profile successfully")
+            return JSONResponse(content={
+                'success': True, 
+                'message': 'Profile updated successfully',
+                'avatar_url': request.avatar_url if request.avatar_url else None
+            })
+        else:
+            logger.info(f"No updates for user {current_user['id']}")
+            return JSONResponse(content={'success': True, 'message': '沒有需要更新的資料'})
+
+    except mysql.connector.Error as e:
+        logger.error(f"Database error for user {current_user['id']}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"資料庫錯誤: {str(e)}")
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Unexpected error for user {current_user['id']}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"發生意外錯誤: {str(e)}")
+    finally:
+        if cursor:
+            cursor.close()
+
+
+@router.get("/get_user_avatar")
+async def get_user_avatar(
+    current_user: dict = Depends(get_current_user),
+    db: mysql.connector.connection.MySQLConnection = Depends(get_db)
+):
+    try:
+        cursor = db.cursor(dictionary=True)
+        query = "SELECT avatar_url FROM users WHERE id = %s"
+        cursor.execute(query, (current_user["id"],))
+        result = cursor.fetchone()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        print(result)  # 這會在服務器端控制台打印結果
+        return result  # 這會將結果作為 JSON 返回給客戶端
+    except mysql.connector.Error as e:
+        print(f"Error executing query: {e}")
+        raise HTTPException(status_code=500, detail="Database query failed")
+    finally:
+        cursor.close()

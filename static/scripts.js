@@ -4,6 +4,7 @@ let ws; // WebSocket 連線
 let currentPartnerId = null;
 let currentMoodScore = 0;
 let currentWeather = 'sunny';
+let isLoggedIn = !!localStorage.getItem('token');
 
 
 const SAVE_COOLDOWN = 5000; 
@@ -359,6 +360,19 @@ async function respondToMatchRequest(requesterId, action) {
     }
 }
 
+function updateUserDisplay() {
+    const userName = localStorage.getItem('user_name');
+    if (userName && userAvatar) {
+        userAvatar.textContent = userName.charAt(0).toUpperCase();
+        userAvatar.style.display = 'flex';
+    }
+    if (loginBtn) {
+        loginBtn.textContent = isLoggedIn ? 'Sign out' : 'Sign in';
+    } else {
+        console.error('Login button not found');
+    }
+}
+
 document.addEventListener('DOMContentLoaded', (event) => {
     console.log('DOM fully loaded and parsed');
     
@@ -372,7 +386,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
     const overlay = document.querySelector('.overlay');
     const loginRegisterBtn = document.getElementById('login-register-btn');
     const signupRegisterBtn = document.getElementById('signup-register-btn');
-    const userAvatar = document.getElementById('userAvatar');
 
     let isLoggedIn = !!localStorage.getItem('token');
     const currentPage = window.location.pathname;
@@ -392,18 +405,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
             window.location.href = '/static/index.html';
             }
 
-    function updateUserDisplay() {
-        const userName = localStorage.getItem('user_name');
-        if (userName && userAvatar) {
-            userAvatar.textContent = userName.charAt(0).toUpperCase();
-            userAvatar.style.display = 'flex';
-        }
-        if (loginBtn) {
-            loginBtn.textContent = isLoggedIn ? 'Sign out' : 'Sign in';
-        } else {
-            console.error('Login button not found');
-        }
-    }
 
     updateUserDisplay();
     
@@ -814,7 +815,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         .then(response => response.json())
         .then(data => {
             if (data.id) {
-                showMessage(document.querySelector('.success-message'), 'Diary saved successfully!');
+                showMessage(document.querySelector('.success-self-info'), 'Diary saved successfully!');
                 currentEntryId = data.id;
                 saveDiaryBtn.textContent = 'UPDATE';
 
@@ -1275,7 +1276,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
     
                 const data = await response.json();
                 if (data.message) {
-                    showMessage(document.querySelector('.success-message'), 'Diary entry successfully deleted');
+                    showMessage(document.querySelector('.success-self-info'), 'Diary entry successfully deleted');
                     
                     await loadRecentDiaries(); // 重新載入最近的日記列表
                     await updateCalendar(new Date().getFullYear(), new Date().getMonth() + 1); // 更新日曆
@@ -1308,28 +1309,267 @@ document.addEventListener('DOMContentLoaded', (event) => {
     loadRecentDiaries(); // 頁面加載時載入最近的日記
 
     
-} // 只在 diary.html 頁面執行的代碼尾部=========================
+    } // 只在 diary.html 頁面執行的代碼尾部=========================
 
-function showMessage(element, message, delay = 0) {
-    console.log('Showing message:', message); // 添加日誌
-    setTimeout(() => {
-        if (element) {
-            const translations = {
-                '登入失敗，帳號或密碼錯誤或其他原因': 'You have entered an invalid username or password',
-                '註冊失敗，重複的 Email 或其他原因': 'Registration failed, please check email and password'
-            };
-            element.textContent = translations[message] || message;
-            element.style.display = 'block';
-            console.log('Message displayed:', element.textContent); // 添加日誌
-            setTimeout(() => {
-                element.style.display = 'none';
-                console.log('Message hidden'); // 添加日誌
-            }, 3000);
-        } else {
-            console.error('Message element not found:', message);
+    function showMessage(element, message, delay = 0) {
+        console.log('Showing message:', message); // 添加日誌
+        setTimeout(() => {
+            if (element) {
+                const translations = {
+                    '登入失敗，帳號或密碼錯誤或其他原因': 'You have entered an invalid username or password',
+                    '註冊失敗，重複的 Email 或其他原因': 'Registration failed, please check email and password'
+                };
+                element.textContent = translations[message] || message;
+                element.style.display = 'block';
+                console.log('Message displayed:', element.textContent); // 添加日誌
+                setTimeout(() => {
+                    element.style.display = 'none';
+                    console.log('Message hidden'); // 添加日誌
+                }, 3000);
+            } else {
+                console.error('Message element not found:', message);
+            }
+        }, delay);
+    }
+
+//編輯個人資料
+
+    const userAvatar = document.getElementById('userAvatar');
+    const userProfileModal = document.getElementById('user-profile-modal');
+    const profileForm = document.getElementById('profile-form');
+    const avatarUpload = document.getElementById('avatar-upload');
+    const avatarPreview = document.getElementById('avatar-preview');
+    const changePasswordBtn = document.getElementById('change-password-btn');
+    const passwordFields = document.getElementById('password-fields');
+
+    function clearPasswordFields() {
+        document.getElementById('current-password').value = '';
+        document.getElementById('new-password').value = '';
+        document.getElementById('confirm-password').value = '';
+    }
+
+    function resetPasswordChangeUI() {
+        const passwordFields = document.getElementById('password-fields');
+        const changePasswordBtn = document.getElementById('change-password-btn');
+        
+        if (passwordFields) {
+            passwordFields.style.display = 'none';
         }
-    }, delay);
+        if (changePasswordBtn) {
+            changePasswordBtn.textContent = 'Change Password';
+        }
+    }
+
+    async function loadUserAvatar() {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                console.error('No token found, user might not be logged in');
+                return;
+            }
+    
+            const response = await fetch('/get_user_avatar', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+    
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+    
+            const userData = await response.json();
+            console.log('Received user data:', userData);  // 在控制台打印接收到的數據
+
+            if (userData && userData.avatar_url) {
+                const userAvatar = document.getElementById('userAvatar');
+                const avatarPreview = document.getElementById('avatar-preview');
+
+                if (userAvatar) {
+                    userAvatar.style.backgroundImage = `url('${userData.avatar_url}')`;
+                }
+
+                if (avatarPreview) {
+                    avatarPreview.style.backgroundImage = `url('${userData.avatar_url}')`;
+                }
+            } else {
+                console.log('No avatar URL found in the response');
+            }
+        } catch (error) {
+            console.error('Error loading user avatar:', error);
+        }
+    }
+    loadUserAvatar();
+
+
+
+    if (userAvatar) {
+        userAvatar.addEventListener('click', function() {
+            if (userProfileModal) {
+                userProfileModal.style.display = 'block';
+                clearPasswordFields();
+                resetPasswordChangeUI();
+            }
+        });
+    }
+
+    if (closeBtn && closeBtn.length > 0) {
+        closeBtn.forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (userProfileModal) {
+                    userProfileModal.style.display = 'none';
+                }
+            });
+        });
+    }
+
+    // 頭像預覽
+    avatarUpload.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                avatarPreview.src = e.target.result;
+            }
+            reader.readAsDataURL(file);
+        }
+    });
+    
+    // 顯示/隱藏密碼欄位
+    changePasswordBtn.addEventListener('click', function() {
+        passwordFields.style.display = passwordFields.style.display === 'none' ? 'block' : 'none';
+    });
+
+    const selfIntroElement = document.getElementById('self-intro');
+    if (selfIntroElement) {
+        const savedSelfIntro = localStorage.getItem('selfIntro');
+        if (savedSelfIntro) {
+            selfIntroElement.value = savedSelfIntro;
+        }
+
+        selfIntroElement.addEventListener('input', function() {
+            localStorage.setItem('selfIntro', this.value);
+        });
+    }
+
+
+    if (profileForm) {
+        profileForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+        const submitButton = this.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+
+        const currentPassword = document.getElementById('current-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+        const avatarFile = document.getElementById('avatar-upload').files[0];
+        
+        const formData = new FormData(this);
+        formData.delete('self_intro');  //存localstorage，不發送後端
+        
+
+        if (!currentPassword && !newPassword && !confirmPassword) {
+            formData.delete('current-password');
+            formData.delete('new-password');
+            formData.delete('confirm-password');
+        } else if (newPassword !== confirmPassword) {
+            showMessage(document.querySelector('.fail-self-info'), 'New passwords do not match');
+            return;
+        }
+        
+
+        let avatarUrl = '';
+        if (avatarFile) {
+            try {
+                // 獲取預簽名 URL
+                const presignedUrlResponse = await fetch('/get_presigned_url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ filename: avatarFile.name }),
+                });
+                const { url: presignedUrl, cloudfront_url } = await presignedUrlResponse.json();
+
+                // 上傳圖片到 S3
+                await fetch(presignedUrl, {
+                    method: 'PUT',
+                    body: avatarFile,
+                    headers: {
+                        'Content-Type': avatarFile.type,
+                    },
+                });
+
+                avatarUrl = cloudfront_url;
+            } catch (error) {
+                console.error('Error uploading avatar:', error);
+                showMessage(document.querySelector('.fail-self-info'), 'Upload avatar failed');
+                submitButton.disabled = false;
+                return;
+            }
+        }
+
+        try {
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                showMessage(document.querySelector('.fail-self-info'), 'Please signin first');
+                return;
+            }
+
+            const response = await fetch('/update_profile', {
+                method: 'POST',
+                body: JSON.stringify({
+                    current_password: currentPassword,
+                    new_password: newPassword,
+                    avatar_url: avatarUrl
+                }),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log('Update successful, received result:', result);
+
+                showMessage(document.querySelector('.success-self-info'), 'Update profile successfully');
+                if (result.avatar_url) {
+                    console.log('Attempting to update avatar with URL:', result.avatar_url);
+                    const userAvatar = document.getElementById('userAvatar');
+                    const avatarPreview = document.getElementById('avatar-preview');
+                    if (userAvatar) {
+                        userAvatar.style.backgroundImage = `url('${result.avatar_url}')`;
+                        avatarPreview.style.backgroundImage = `url('${result.avatar_url}')`;
+                        
+                    } else {
+                        console.error('userAvatar element not found');
+                    }
+                } else {
+                    console.log('No avatar_url in the result');
+                }
+            } else {
+                console.error('Update failed:', result.message);
+                showMessage(document.querySelector('.fail-self-info'), result.message || 'Update profile failed');
+            }
+
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            showMessage(document.querySelector('.fail-self-info'), 'Update profile failed');
+        } finally {
+            submitButton.disabled = false;
+        }
+    });
 }
+
 
 }); //DOM尾部==========================
 

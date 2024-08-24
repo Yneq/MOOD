@@ -26,7 +26,7 @@ rds_db_config = {
 # 建立 MySQL 連接池
 pool = pooling.MySQLConnectionPool(
 	pool_name = "aws_rds_pool",
-	pool_size = 30,
+	pool_size = 32,
 	**rds_db_config
 )
 print("Connection pool created successfully")

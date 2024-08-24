@@ -120,21 +120,31 @@
 </div>
   <!--manage user info-->
 <div id="user-profile-modal" class="modal">
+    <div class="member-top-bar"></div>
     <div class="modal-content">
         <span class="close-btn"></span>
-        <h2>Manage your MOOD account</h2>
+        <div class="log-in">MOOD account</div>
         <form id="profile-form">
             <div class="avatar-upload">
-                <label for="avatar-upload">Uplaod you avatar</label>
-                <input type="file" id="avatar-upload" accept="image/*">
-                <img id="avatar-preview" src="#" alt="頭像預覽" style="display:none;">
+                <label for="avatar-upload" class="avatar-label">
+                    <span id="avatar-preview"></span>
+                    <span>Upload avatar</span>
+                </label>
+                <input type="file" id="avatar-upload" accept="image/*" class="input-member" style="display: none;">
             </div>
-            <input type="password" id="current-password" placeholder="Password" required>
-            <input type="password" id="new-password" placeholder="New password">
-            <input type="password" id="confirm-password" placeholder="Confirm new password">
-            <textarea id="self-intro" placeholder="Intro yourself" maxlength="500"></textarea>
-            <button type="submit">SAVE</button>
+            <textarea id="self-intro" placeholder="Introduce yourself" class="input-member" maxlength="500"></textarea>
+            <div class="change-password">
+                <span id="change-password-btn">Change password</span>
+            </div>
+            <div id="password-fields" style="display: none;">
+                <input type="password" id="current-password" placeholder="Current Password" class="input-member">
+                <input type="password" id="new-password" placeholder="New Password" class="input-member">
+                <input type="password" id="confirm-password" placeholder="Confirm New Password" class="input-member">
+            </div>
+            <button type="submit" class="register-btn">SAVE</button>
         </form>
+        <div class="fail-self-info" style="display: none;"></div>
+        <div class="success-self-info" style="display: none;"></div>
     </div>
 </div>
 </body>

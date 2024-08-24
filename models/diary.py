@@ -5,6 +5,11 @@ from typing import Optional, Union
 class PresigneUrlRequest(BaseModel):
     filename: str
 
+class ProfileUpdateRequest(BaseModel):
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+    avatar_url: Optional[str] = None
+
 class MessageRequest(BaseModel):
     text: str
     imageUrl: str

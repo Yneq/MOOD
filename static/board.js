@@ -574,49 +574,287 @@ function parseJwt(token) {
         return null;
     }
 }        
+
+//編輯個人資料
+
+const userProfileModal = document.getElementById('user-profile-modal');
+const profileForm = document.getElementById('profile-form');
+const avatarUpload = document.getElementById('avatar-upload');
+const avatarPreview = document.getElementById('avatar-preview');
+const changePasswordBtn = document.getElementById('change-password-btn');
+const passwordFields = document.getElementById('password-fields');
+
+function clearPasswordFields() {
+    document.getElementById('current-password').value = '';
+    document.getElementById('new-password').value = '';
+    document.getElementById('confirm-password').value = '';
+}
+
+function resetPasswordChangeUI() {
+    const passwordFields = document.getElementById('password-fields');
+    const changePasswordBtn = document.getElementById('change-password-btn');
+    
+    if (passwordFields) {
+        passwordFields.style.display = 'none';
+    }
+    if (changePasswordBtn) {
+        changePasswordBtn.textContent = 'Change Password';
+    }
+}
+
+async function loadUserAvatar() {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('No token found, user might not be logged in');
+            return;
+        }
+
+        const response = await fetch('/get_user_avatar', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const userData = await response.json();
+        console.log('Received user data:', userData);  // 在控制台打印接收到的數據
+
+        if (userData && userData.avatar_url) {
+            const userAvatar = document.getElementById('userAvatar');
+            const avatarPreview = document.getElementById('avatar-preview');
+
+            if (userAvatar) {
+                userAvatar.style.backgroundImage = `url('${userData.avatar_url}')`;
+            }
+
+            if (avatarPreview) {
+                avatarPreview.style.backgroundImage = `url('${userData.avatar_url}')`;
+            }
+        } else {
+            console.log('No avatar URL found in the response');
+        }
+    } catch (error) {
+        console.error('Error loading user avatar:', error);
+    }
+}
+loadUserAvatar();
+
+
+
+if (userAvatar) {
+    userAvatar.addEventListener('click', function() {
+        if (userProfileModal) {
+            userProfileModal.style.display = 'block';
+            clearPasswordFields();
+            resetPasswordChangeUI();
+        }
+    });
+}
+
+if (closeBtn && closeBtn.length > 0) {
+    closeBtn.forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (userProfileModal) {
+                userProfileModal.style.display = 'none';
+            }
+        });
+    });
+}
+
+// 頭像預覽
+avatarUpload.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            avatarPreview.src = e.target.result;
+        }
+        reader.readAsDataURL(file);
+    }
+});
+
+// 顯示/隱藏密碼欄位
+changePasswordBtn.addEventListener('click', function() {
+    passwordFields.style.display = passwordFields.style.display === 'none' ? 'block' : 'none';
+});
+
+const selfIntroElement = document.getElementById('self-intro');
+if (selfIntroElement) {
+    const savedSelfIntro = localStorage.getItem('selfIntro');
+    if (savedSelfIntro) {
+        selfIntroElement.value = savedSelfIntro;
+    }
+
+    selfIntroElement.addEventListener('input', function() {
+        localStorage.setItem('selfIntro', this.value);
+    });
+}
+
+
+if (profileForm) {
+    profileForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+    const submitButton = this.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+    const avatarFile = document.getElementById('avatar-upload').files[0];
+    
+    const formData = new FormData(this);
+    formData.delete('self_intro');  //存localstorage，不發送後端
+    
+
+    if (!currentPassword && !newPassword && !confirmPassword) {
+        formData.delete('current-password');
+        formData.delete('new-password');
+        formData.delete('confirm-password');
+    } else if (newPassword !== confirmPassword) {
+        showMessage(document.querySelector('.fail-self-info'), 'New passwords do not match');
+        return;
+    }
+    
+
+    let avatarUrl = '';
+    if (avatarFile) {
+        try {
+            // 獲取預簽名 URL
+            const presignedUrlResponse = await fetch('/get_presigned_url', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ filename: avatarFile.name }),
+            });
+            const { url: presignedUrl, cloudfront_url } = await presignedUrlResponse.json();
+
+            // 上傳圖片到 S3
+            await fetch(presignedUrl, {
+                method: 'PUT',
+                body: avatarFile,
+                headers: {
+                    'Content-Type': avatarFile.type,
+                },
+            });
+
+            avatarUrl = cloudfront_url;
+        } catch (error) {
+            console.error('Error uploading avatar:', error);
+            showMessage(document.querySelector('.fail-self-info'), 'Upload avatar failed');
+            submitButton.disabled = false;
+            return;
+        }
+    }
+
+    try {
+        const token = localStorage.getItem('token');
+
+        if (!token) {
+            showMessage(document.querySelector('.fail-self-info'), 'Please signin first');
+            return;
+        }
+
+        const response = await fetch('/update_profile', {
+            method: 'POST',
+            body: JSON.stringify({
+                current_password: currentPassword,
+                new_password: newPassword,
+                avatar_url: avatarUrl
+            }),
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('Update successful, received result:', result);
+
+            showMessage(document.querySelector('.success-self-info'), 'Update profile successfully');
+            if (result.avatar_url) {
+                console.log('Attempting to update avatar with URL:', result.avatar_url);
+                const userAvatar = document.getElementById('userAvatar');
+                const avatarPreview = document.getElementById('avatar-preview');
+                if (userAvatar) {
+                    userAvatar.style.backgroundImage = `url('${result.avatar_url}')`;
+                    avatarPreview.style.backgroundImage = `url('${result.avatar_url}')`;
+                    
+                } else {
+                    console.error('userAvatar element not found');
+                }
+            } else {
+                console.log('No avatar_url in the result');
+            }
+        } else {
+            console.error('Update failed:', result.message);
+            showMessage(document.querySelector('.fail-self-info'), result.message || 'Update profile failed');
+        }
+
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        showMessage(document.querySelector('.fail-self-info'), 'Update profile failed');
+    } finally {
+        submitButton.disabled = false;
+    }
+});
+}
+
 }); //DOM 尾部=======================
 
 //websocket
 
-function initializeWebSocket() {
+// function initializeWebSocket() {
 
-const token = localStorage.getItem('token');
-socket = new WebSocket(`${wsProtocol}//${window.location.host}/ws?token=${token}`);
+// const token = localStorage.getItem('token');
+// socket = new WebSocket(`${wsProtocol}//${window.location.host}/ws?token=${token}`);
 
-socket.onopen = function(event) {
-    console.log("WebSocket 連接已建立");
-    const userInfo = {
-        type: 'user_info',
-        user_name: currentUserName,
-        email: localStorage.getItem('email')
-    };
-    socket.send(JSON.stringify(userInfo));
-};
+// socket.onopen = function(event) {
+//     console.log("WebSocket 連接已建立");
+//     const userInfo = {
+//         type: 'user_info',
+//         user_name: currentUserName,
+//         email: localStorage.getItem('email')
+//     };
+//     socket.send(JSON.stringify(userInfo));
+// };
 
-socket.onmessage = function(event) {
-    console.log("Received WebSocket message:", event.data);
-    try {
-        const message = JSON.parse(event.data);
-        console.log("Parsed WebSocket message:", message);
+// socket.onmessage = function(event) {
+//     console.log("Received WebSocket message:", event.data);
+//     try {
+//         const message = JSON.parse(event.data);
+//         console.log("Parsed WebSocket message:", message);
 
-        if (message && typeof message === 'object' && message.id) {
-            handleNewMessage(message);
-        } else {
-            console.error("Invalid message received from WebSocket:", message);
-        }
-    } catch (error) {
-        console.error("Error processing WebSocket message:", error);
-    }
-};
-socket.onerror = function(error) {
-    console.error("WebSocket ERROR:", error);
-};
+//         if (message && typeof message === 'object' && message.id) {
+//             handleNewMessage(message);
+//         } else {
+//             console.error("Invalid message received from WebSocket:", message);
+//         }
+//     } catch (error) {
+//         console.error("Error processing WebSocket message:", error);
+//     }
+// };
+// socket.onerror = function(error) {
+//     console.error("WebSocket ERROR:", error);
+// };
 
-socket.onclose = function(event) {
-    console.log("WebSocket Connect closed");
-    // 可以在這裡添加重新連接的邏輯
-};
-}
+// socket.onclose = function(event) {
+//     console.log("WebSocket Connect closed");
+//     // 可以在這裡添加重新連接的邏輯
+// };
+// }
 
 function handleNewMessage(message) {
 console.log("Handling new message:", message);
@@ -634,17 +872,14 @@ const newMessage = {
 }
 }
 
-function sendMessageViaWebSocket(message) {
-if (socket && socket.readyState === WebSocket.OPEN) {
-    console.log("通過 WebSocket 發送消息:", JSON.stringify(message));
-    socket.send(JSON.stringify(message));
-} else {
-    console.error("WebSocket 未連接，無法發送消息");
-}
-}
-
-
-
+// function sendMessageViaWebSocket(message) {
+// if (socket && socket.readyState === WebSocket.OPEN) {
+//     console.log("通過 WebSocket 發送消息:", JSON.stringify(message));
+//     socket.send(JSON.stringify(message));
+// } else {
+//     console.error("WebSocket 未連接，無法發送消息");
+// }
+// }
 
 function showMessage(message, type = 'info') {
     const messageContainer = document.createElement('div');
@@ -663,3 +898,55 @@ function showMessage(message, type = 'info') {
         }, 300);
     }, 2000);
 }
+
+function updateUserDisplay() {
+    const userName = localStorage.getItem('user_name');
+    if (userName && userAvatar) {
+        userAvatar.textContent = userName.charAt(0).toUpperCase();
+        userAvatar.style.display = 'flex';
+    }
+    if (loginBtn) {
+        loginBtn.textContent = isLoggedIn ? 'Sign out' : 'Sign in';
+    } else {
+        console.error('Login button not found');
+    }
+}
+
+function handleLogout() {
+    localStorage.clear();
+    if (window.matchWebSocket) {
+        window.matchWebSocket.close();
+    }
+    isLoggedIn = false;
+    updateUserDisplay();
+    if (userAvatar) {
+        userAvatar.style.display = 'none';
+    }
+    // 如果在需要登錄的頁面上登出，重定向到首頁
+    const currentPage = window.location.pathname;
+    if (currentPage.includes('diary.html') || currentPage.includes('match.html')) {
+        window.location.href = '/static/index.html';
+    }
+}
+
+function showMessage(element, message, delay = 0) {
+    console.log('Showing message:', message); // 添加日誌
+    setTimeout(() => {
+        if (element) {
+            const translations = {
+                '登入失敗，帳號或密碼錯誤或其他原因': 'You have entered an invalid username or password',
+                '註冊失敗，重複的 Email 或其他原因': 'Registration failed, please check email and password'
+            };
+            element.textContent = translations[message] || message;
+            element.style.display = 'block';
+            console.log('Message displayed:', element.textContent); // 添加日誌
+            setTimeout(() => {
+                element.style.display = 'none';
+                console.log('Message hidden'); // 添加日誌
+            }, 3000);
+        } else {
+            console.error('Message element not found:', message);
+        }
+    }, delay);
+}
+//message-container Update profile successfully show
