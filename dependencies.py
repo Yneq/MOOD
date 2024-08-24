@@ -27,6 +27,7 @@ rds_db_config = {
 pool = pooling.MySQLConnectionPool(
 	pool_name = "aws_rds_pool",
 	pool_size = 32,
+    pool_reset_session=True,
 	**rds_db_config
 )
 print("Connection pool created successfully")
