@@ -38,6 +38,7 @@ body {
 
 .user-avatar {
   width: 32px;
+  height: 32px;
   border-radius: 50%;
   background-color: #234064e0;
   color: white;
@@ -49,6 +50,8 @@ body {
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 4px #007bfff7; 
 }
 #loginBtn {
   margin-left: 10px;
@@ -81,6 +84,9 @@ body {
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 4px #007bfff7; 
+  margin-bottom: 5px;
 }
 
 #self-intro {

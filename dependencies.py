@@ -20,13 +20,14 @@ rds_db_config = {
 	"host": os.getenv("RDS_HOST"),
 	"password": os.getenv("RDS_PASSWORD"),
 	"database": os.getenv("RDS_MOOD"),
-	"time_zone":"-08:00"
+	"time_zone":"-08:00",
+    "connection_timeout": 300,  # 5 分鐘
 }
 
 # 建立 MySQL 連接池
 pool = pooling.MySQLConnectionPool(
 	pool_name = "aws_rds_pool",
-	pool_size = 32,
+	pool_size = 24,
     pool_reset_session=True,
 	**rds_db_config
 )
@@ -38,6 +39,7 @@ def get_db():
     connection = None
     try:
         connection = pool.get_connection()
+        connection.ping(reconnect=True, attempts=3, delay=5)  # 確保連接是活的
         if connection is None:
             raise HTTPException(status_code=503, detail="無法獲取數據庫連接")
         yield connection

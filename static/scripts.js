@@ -80,10 +80,6 @@ async function checkMatchStatus() {
         console.log('Match status response:', data);
 
         const partnerNameElement = document.querySelector('.partner-name');
-        if (partnerNameElement) {
-            partnerNameElement.textContent = '';
-            partnerNameElement.style.display = 'none';
-        }
 
         switch(data.status) {
             case 'accepted':
@@ -94,7 +90,26 @@ async function checkMatchStatus() {
                 }
                 
                 if (partnerNameElement) {
-                    partnerNameElement.textContent = data.partner_name.charAt(0).toUpperCase();
+                    const partnerAvatarUrl = await loadUserAvatar(data.partner_id);
+
+                    if (partnerAvatarUrl) {
+                        partnerNameElement.style.backgroundImage = `url('${partnerAvatarUrl}')`;
+                        partnerNameElement.textContent = '';
+
+                        const tooltip = document.getElementById('partnerNameTooltip');
+                        tooltip.textContent = data.partner_name;
+                        partnerNameElement.onmouseover = function() {
+                            tooltip.style.visibility = 'visible';
+                            tooltip.style.opacity = '1';
+                        };
+                        partnerNameElement.onmouseout = function() {
+                            tooltip.style.visibility = 'hidden';
+                            tooltip.style.opacity = '0';
+                        };
+                    } else {
+                        partnerNameElement.style.backgroundImage = '';
+                        partnerNameElement.textContent = data.partner_name.charAt(0).toUpperCase();
+                    }
                     partnerNameElement.style.display = 'flex';
                 }
                 await loadPartnerDiary(data.partner_id);
@@ -362,10 +377,15 @@ async function respondToMatchRequest(requesterId, action) {
 
 function updateUserDisplay() {
     const userName = localStorage.getItem('user_name');
+    const isLoggedIn = !!localStorage.getItem('token');  // 使用 token 判斷登錄狀態
+    
     if (userName && userAvatar) {
         userAvatar.textContent = userName.charAt(0).toUpperCase();
         userAvatar.style.display = 'flex';
+    } else if (userAvatar) {
+        userAvatar.style.display = 'none';
     }
+
     if (loginBtn) {
         loginBtn.textContent = isLoggedIn ? 'Sign out' : 'Sign in';
     } else {
@@ -373,7 +393,48 @@ function updateUserDisplay() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', (event) => {
+async function loadUserAvatar(targetUserId = null) {
+    try {
+        const token = localStorage.getItem('token');
+        const currentUserId = localStorage.getItem('user_id');
+
+        if (!token || !currentUserId) {
+            console.error('No token or user ID found');
+            return;
+        }
+
+        const userId = targetUserId || currentUserId;
+        const url = `/get_user_avatar/${userId}`
+
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const userData = await response.json();
+        console.log('Received user data:', userData);
+
+        if (userData && userData.avatar_url) {
+            return userData.avatar_url;
+        } else {
+            console.log('No avatar URL found in the response');
+            return null;
+        }
+    } catch (error) {
+        console.error('Error loading user avatar:', error);
+        return null;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => loadUserAvatar());
+
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM fully loaded and parsed');
     
     // 用戶認證相關變量
@@ -466,6 +527,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
     function showLoginModal() {
         modal_login.style.display = "block";
         overlay.style.display = "block";
+        
     }
 
     closeBtn.forEach(btn => {
@@ -518,6 +580,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
                 } else if (data.token) {
                     //加入user_name, email
                     localStorage.setItem('token', data.token);
+                    isLoggedIn = true;  // 立即更新登錄狀態
                     // 解析 token 並保存用戶信息
                     const tokenPayload = parseJwt(data.token);
                     if (tokenPayload) {
@@ -532,12 +595,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
                             localStorage.setItem('user_id', tokenPayload.id);
                         }
 
-
+                    updateUserDisplay();
                     showMessage(successLoginMessage, 'Sign in successfully');
                     setTimeout(() => {
                         closeModals();
-                        isLoggedIn = true;
-                        updateUserDisplay();
+                        
                          // 如果在 match 頁面,建立 WebSocket 連接
                         if (window.location.pathname.includes('match.html')) {
                             connectWebSocket();
@@ -617,6 +679,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
             console.log('Error', error.message);
         });
     }
+
 
     // 只在 diary, match 頁面執行的代碼====================================
     const isDiaryPage = window.location.pathname.includes('diary.html');
@@ -1342,6 +1405,36 @@ document.addEventListener('DOMContentLoaded', (event) => {
     const changePasswordBtn = document.getElementById('change-password-btn');
     const passwordFields = document.getElementById('password-fields');
 
+    const currentUserAvatar = loadUserAvatar();
+
+    if (userAvatar && avatarPreview) {
+        try {
+            const avatarUrl = await loadUserAvatar();
+            if (avatarUrl) {
+                userAvatar.style.backgroundImage = `url('${avatarUrl}')`;
+                avatarPreview.style.backgroundImage = `url('${avatarUrl}')`;
+                userAvatar.textContent = '';
+                avatarPreview.textContent = '';
+            } else {
+                // 如果沒有頭像，顯示默認圖片或名字首字母
+                const currentUserName = localStorage.getItem('user_name');
+                if (currentUserName) {
+                    userAvatar.textContent = currentUserName.charAt(0).toUpperCase();
+
+                } else {
+                    // 如果連用戶名也沒有，可以設置一個默認圖片
+                    userAvatar.style.backgroundImage = '';
+                    avatarPreview.style.backgroundImage = '';
+                }
+            }
+        } catch (error) {
+            console.error('Error setting user avatar:', error);
+            // 處理錯誤，可能顯示一個默認圖片
+        }
+    } else {
+        console.error('userAvatar or avatarPreview element not found');
+    }
+
     function clearPasswordFields() {
         document.getElementById('current-password').value = '';
         document.getElementById('new-password').value = '';
@@ -1359,50 +1452,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
             changePasswordBtn.textContent = 'Change Password';
         }
     }
-
-    async function loadUserAvatar() {
-        try {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                console.error('No token found, user might not be logged in');
-                return;
-            }
-    
-            const response = await fetch('/get_user_avatar', {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-    
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-    
-            const userData = await response.json();
-            console.log('Received user data:', userData);  // 在控制台打印接收到的數據
-
-            if (userData && userData.avatar_url) {
-                const userAvatar = document.getElementById('userAvatar');
-                const avatarPreview = document.getElementById('avatar-preview');
-
-                if (userAvatar) {
-                    userAvatar.style.backgroundImage = `url('${userData.avatar_url}')`;
-                }
-
-                if (avatarPreview) {
-                    avatarPreview.style.backgroundImage = `url('${userData.avatar_url}')`;
-                }
-            } else {
-                console.log('No avatar URL found in the response');
-            }
-        } catch (error) {
-            console.error('Error loading user avatar:', error);
-        }
-    }
-    loadUserAvatar();
-
-
 
     if (userAvatar) {
         userAvatar.addEventListener('click', function() {

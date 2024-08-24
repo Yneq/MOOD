@@ -339,40 +339,43 @@ document.getElementById('imageInput').addEventListener('change', function() {
 });
 
 
-document.addEventListener('DOMContentLoaded', (event) => {
-console.log('DOM fully loaded and parsed');
-const token = localStorage.getItem('token');
-if (token) {
-    const tokenPayload = parseJwt(token);
-    if (tokenPayload) {
-        if (tokenPayload.name && !localStorage.getItem('user_name')) {
-            localStorage.setItem('user_name', tokenPayload.name);
-        }
-        if (tokenPayload.email && !localStorage.getItem('email')) {
-            localStorage.setItem('email', tokenPayload.email);
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOM fully loaded and parsed');
+
+    const token = localStorage.getItem('token');
+    if (token) {
+        const tokenPayload = parseJwt(token);
+        if (tokenPayload) {
+            if (tokenPayload.name && !localStorage.getItem('user_name')) {
+                localStorage.setItem('user_name', tokenPayload.name);
+            }
+            if (tokenPayload.email && !localStorage.getItem('email')) {
+                localStorage.setItem('email', tokenPayload.email);
+            }
         }
     }
-}
 
-// 用戶認證相關變量
-const modal_login = document.getElementById('modal-login');
-const modal_signup = document.getElementById('modal-signup');
-const loginBtn = document.getElementById('loginBtn');
-const closeBtn = document.querySelectorAll('.close-btn');
-const q_loginBtn = document.getElementById('q-login');
-const q_signupBtn = document.getElementById('q-signup');
-const overlay = document.querySelector('.overlay');
-const loginRegisterBtn = document.getElementById('login-register-btn');
-const signupRegisterBtn = document.getElementById('signup-register-btn');
-const userAvatar = document.getElementById('userAvatar');
+    // 用戶認證相關變量
+    const modal_login = document.getElementById('modal-login');
+    const modal_signup = document.getElementById('modal-signup');
+    const loginBtn = document.getElementById('loginBtn');
+    const closeBtn = document.querySelectorAll('.close-btn');
+    const q_loginBtn = document.getElementById('q-login');
+    const q_signupBtn = document.getElementById('q-signup');
+    const overlay = document.querySelector('.overlay');
+    const loginRegisterBtn = document.getElementById('login-register-btn');
+    const signupRegisterBtn = document.getElementById('signup-register-btn');
+    const userAvatar = document.getElementById('userAvatar');
 
 
-let isLoggedIn = !!localStorage.getItem('token');
+    let isLoggedIn = !!localStorage.getItem('token');
 
-// 檢查當前頁面
-console.log('Current page:', window.location.pathname);
-const isBoardPage = window.location.pathname.includes('board.html');
-console.log('Is board page:', isBoardPage);
+    // 檢查當前頁面
+    console.log('Current page:', window.location.pathname);
+    const isBoardPage = window.location.pathname.includes('board.html');
+    console.log('Is board page:', isBoardPage);
+
+    
 
 function updateUserDisplay() {
     const userName = localStorage.getItem('user_name');
@@ -584,6 +587,38 @@ const avatarPreview = document.getElementById('avatar-preview');
 const changePasswordBtn = document.getElementById('change-password-btn');
 const passwordFields = document.getElementById('password-fields');
 
+
+const currentUserAvatar = loadUserAvatar();
+
+    if (userAvatar && avatarPreview) {
+        try {
+            const avatarUrl = await loadUserAvatar();
+            if (avatarUrl) {
+                userAvatar.style.backgroundImage = `url('${avatarUrl}')`;
+                avatarPreview.style.backgroundImage = `url('${avatarUrl}')`;
+                userAvatar.textContent = '';
+                avatarPreview.textContent = '';
+            } else {
+                // 如果沒有頭像，顯示默認圖片或名字首字母
+                const currentUserName = localStorage.getItem('user_name');
+                if (currentUserName) {
+                    userAvatar.textContent = currentUserName.charAt(0).toUpperCase();
+
+                } else {
+                    // 如果連用戶名也沒有，可以設置一個默認圖片
+                    userAvatar.style.backgroundImage = '';
+                    avatarPreview.style.backgroundImage = '';
+                }
+            }
+        } catch (error) {
+            console.error('Error setting user avatar:', error);
+            // 處理錯誤，可能顯示一個默認圖片
+        }
+    } else {
+        console.error('userAvatar or avatarPreview element not found');
+    }
+
+
 function clearPasswordFields() {
     document.getElementById('current-password').value = '';
     document.getElementById('new-password').value = '';
@@ -602,15 +637,20 @@ function resetPasswordChangeUI() {
     }
 }
 
-async function loadUserAvatar() {
+async function loadUserAvatar(targetUserId = null) {
     try {
         const token = localStorage.getItem('token');
-        if (!token) {
-            console.error('No token found, user might not be logged in');
+        const currentUserId = localStorage.getItem('user_id');
+
+        if (!token || !currentUserId) {
+            console.error('No token or user ID found');
             return;
         }
 
-        const response = await fetch('/get_user_avatar', {
+        const userId = targetUserId || currentUserId;
+        const url = `/get_user_avatar/${userId}`
+
+        const response = await fetch(url, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -622,27 +662,21 @@ async function loadUserAvatar() {
         }
 
         const userData = await response.json();
-        console.log('Received user data:', userData);  // 在控制台打印接收到的數據
+        console.log('Received user data:', userData);
 
         if (userData && userData.avatar_url) {
-            const userAvatar = document.getElementById('userAvatar');
-            const avatarPreview = document.getElementById('avatar-preview');
-
-            if (userAvatar) {
-                userAvatar.style.backgroundImage = `url('${userData.avatar_url}')`;
-            }
-
-            if (avatarPreview) {
-                avatarPreview.style.backgroundImage = `url('${userData.avatar_url}')`;
-            }
+            return userData.avatar_url;
         } else {
             console.log('No avatar URL found in the response');
+            return null;
         }
     } catch (error) {
         console.error('Error loading user avatar:', error);
+        return null;
     }
 }
-loadUserAvatar();
+
+document.addEventListener('DOMContentLoaded', () => loadUserAvatar());
 
 
 
@@ -814,47 +848,7 @@ if (profileForm) {
 
 }); //DOM 尾部=======================
 
-//websocket
 
-// function initializeWebSocket() {
-
-// const token = localStorage.getItem('token');
-// socket = new WebSocket(`${wsProtocol}//${window.location.host}/ws?token=${token}`);
-
-// socket.onopen = function(event) {
-//     console.log("WebSocket 連接已建立");
-//     const userInfo = {
-//         type: 'user_info',
-//         user_name: currentUserName,
-//         email: localStorage.getItem('email')
-//     };
-//     socket.send(JSON.stringify(userInfo));
-// };
-
-// socket.onmessage = function(event) {
-//     console.log("Received WebSocket message:", event.data);
-//     try {
-//         const message = JSON.parse(event.data);
-//         console.log("Parsed WebSocket message:", message);
-
-//         if (message && typeof message === 'object' && message.id) {
-//             handleNewMessage(message);
-//         } else {
-//             console.error("Invalid message received from WebSocket:", message);
-//         }
-//     } catch (error) {
-//         console.error("Error processing WebSocket message:", error);
-//     }
-// };
-// socket.onerror = function(error) {
-//     console.error("WebSocket ERROR:", error);
-// };
-
-// socket.onclose = function(event) {
-//     console.log("WebSocket Connect closed");
-//     // 可以在這裡添加重新連接的邏輯
-// };
-// }
 
 function handleNewMessage(message) {
 console.log("Handling new message:", message);
@@ -872,14 +866,6 @@ const newMessage = {
 }
 }
 
-// function sendMessageViaWebSocket(message) {
-// if (socket && socket.readyState === WebSocket.OPEN) {
-//     console.log("通過 WebSocket 發送消息:", JSON.stringify(message));
-//     socket.send(JSON.stringify(message));
-// } else {
-//     console.error("WebSocket 未連接，無法發送消息");
-// }
-// }
 
 function showMessage(message, type = 'info') {
     const messageContainer = document.createElement('div');
@@ -929,24 +915,24 @@ function handleLogout() {
     }
 }
 
-function showMessage(element, message, delay = 0) {
-    console.log('Showing message:', message); // 添加日誌
-    setTimeout(() => {
-        if (element) {
-            const translations = {
-                '登入失敗，帳號或密碼錯誤或其他原因': 'You have entered an invalid username or password',
-                '註冊失敗，重複的 Email 或其他原因': 'Registration failed, please check email and password'
-            };
-            element.textContent = translations[message] || message;
-            element.style.display = 'block';
-            console.log('Message displayed:', element.textContent); // 添加日誌
-            setTimeout(() => {
-                element.style.display = 'none';
-                console.log('Message hidden'); // 添加日誌
-            }, 3000);
-        } else {
-            console.error('Message element not found:', message);
-        }
-    }, delay);
-}
+// function showMessage(element, message, delay = 0) {
+//     console.log('Showing message:', message); // 添加日誌
+//     setTimeout(() => {
+//         if (element) {
+//             const translations = {
+//                 '登入失敗，帳號或密碼錯誤或其他原因': 'You have entered an invalid username or password',
+//                 '註冊失敗，重複的 Email 或其他原因': 'Registration failed, please check email and password'
+//             };
+//             element.textContent = translations[message] || message;
+//             element.style.display = 'block';
+//             console.log('Message displayed:', element.textContent); // 添加日誌
+//             setTimeout(() => {
+//                 element.style.display = 'none';
+//                 console.log('Message hidden'); // 添加日誌
+//             }, 3000);
+//         } else {
+//             console.error('Message element not found:', message);
+//         }
+//     }, delay);
+// }
 //message-container Update profile successfully show

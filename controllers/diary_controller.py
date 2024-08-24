@@ -540,27 +540,25 @@ async def update_profile(
         if cursor:
             cursor.close()
 
-@router.get("/get_user_avatar")
+@router.get("/get_user_avatar/{user_id}")
 async def get_user_avatar(
+    user_id: int,
     current_user: dict = Depends(get_current_user),
     db: mysql.connector.connection.MySQLConnection = Depends(get_db)
 ):
-    logging.info(f"Attempting to get avatar for user ID: {current_user['id']}")
     try:
         cursor = db.cursor(dictionary=True)
         query = "SELECT avatar_url FROM users WHERE id = %s"
-        logging.info(f"Executing query: {query} with user ID: {current_user['id']}")
-        cursor.execute(query, (current_user["id"],))
+        logging.info(f"Executing query: {query} with user ID: {user_id}")
+        cursor.execute(query, (user_id,))
         result = cursor.fetchone()
 
         if not result:
-            logging.warning(f"User not found for ID: {current_user['id']}")
             raise HTTPException(status_code=404, detail="User not found")
 
         logging.info(f"Query result: {result}")
         return result
     except mysql.connector.Error as e:
-        logging.error(f"Database error: {e}")
         raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
     finally:
         cursor.close()
