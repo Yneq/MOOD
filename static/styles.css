@@ -135,7 +135,14 @@ body {
   font-weight: bold;
   cursor: pointer;
   display: flex;
-  justify-content: center;;
+  justify-content: center;
+  align-items: center;
+  position: absolute;
+  left: 50%;
+  top: 50%; 
+  transform: translate(-50%, -50%); /* 修改：同時在 X 和 Y 軸上移動 */
+  white-space: nowrap; /* 防止文字換行 */
+  height: 100%;
 }
 
 .title-moodsexchange:hover {
@@ -159,6 +166,7 @@ body {
   cursor: pointer;
   white-space: nowrap; /* Prevent text from wrapping */
   justify-content: center; /* Center the text horizontally */
+  align-items: center;
 }
 
 .container {
@@ -468,11 +476,74 @@ footer {
       flex-direction: column;
   }
 
-  .diary-calendar-wall {
+  .card-wrap {
+    height: 380px;
+  }
+
+  .navbar, .nav-content, .main-content, footer {
+    width: 100%;
+    padding-left: 15px;
+    padding-right: 15px;
+    box-sizing: border-box;
+  }
+
+  .main-content {
+      flex-direction: column;
+      align-items: stretch;
+      padding: 20px 15px;
+      margin-top: 10px;
+  }
+
+  .calendar-wall, .diary-container {
+      width: 100%;
+      max-width: 768px;
+  }
+  .calendar-container {
+      max-width: 768px;
+      width: 100%;
+    }
+
+  .diary-entry {
+      width: 100%;
+      margin-right: 0;
+  }
+
+  .diary-content {
+      flex-direction: column;
+      width: 100%;
+      align-items: center;
+  }
+
+  .user1, .user2 {
+      padding: 0;
+      width: 100%;
+      margin-bottom: 20px;
+
+  }
+  .diary-container {
       width: 100%;
   }
 
-  .card-wrap {
-    height: 380px;
+  .nav-content {
+      justify-content: space-between;
+  }
+
+  .title-moodsexchange {
+      font-size: 0; /* 隱藏文字 */
+      width: 30px;
+      height: 30px;
+      background-image: url('exchangeBtn.jpeg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      border-radius: 50%;
+      box-shadow: 0 0 0 4px rgba(68, 136, 153, 1);
+  }
+
+  .title-moodsexchange::before {
+      content: '';
+      display: block;
+      width: 100%;
+      height: 100%;
   }
 }

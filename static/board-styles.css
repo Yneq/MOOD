@@ -30,6 +30,7 @@ body {
     justify-content: space-between;
     padding: 0 15px;
     box-sizing: border-box;
+    position: relative;
 }
 
 
@@ -129,7 +130,14 @@ margin-left: 10px;
     font-weight: bold;
     cursor: pointer;
     display: flex;
-    justify-content: center;;
+    justify-content: center;
+    align-items: center;
+    position: absolute;
+    left: 50%;
+    top: 50%; 
+    transform: translate(-50%, -50%); /* 修改：同時在 X 和 Y 軸上移動 */
+    white-space: nowrap; /* 防止文字換行 */
+    height: 100%;
 }
 
 .title-moodsexchange:hover {
@@ -494,6 +502,9 @@ a {
     background-color: #2196F3;
 }
 
+
+
+/* 新增媒體查詢 */
 @media (max-width: 768px) {
     .navbar, .nav-content, .main-content, footer {
         width: 100%;
@@ -508,5 +519,120 @@ a {
         padding: 20px 15px;
         margin-top: 10px;
     }
+
+    body {
+        font-size: 14px;
+    }
+
+    .navbar, .nav-content, .main-content, footer {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+    .main-content {
+        padding: 15px;
+        margin-top: 10px;
+    }
+
+    .title {
+        font-size: 20px;
+    }
+
+    .title-moodsexchange {
+        font-size: 18px;
+    }
+
+    .booking-btn {
+        font-size: 14px;
+        width: 70px;
+        height: 30px;
+    }
+
+    textarea {
+        font-size: 14px;
+        height: 150px;
+    }
+
+    button {
+        font-size: 14px;
+        padding: 8px 16px;
+    }
+
+    .share-btn {
+        font-size: 16px;
+    }
+
+    .message {
+        padding: 10px;
+    }
+    .nav-content {
+        justify-content: space-between;
+    }
+
+    .title-moodsexchange {
+        font-size: 0; /* 隱藏文字 */
+        width: 30px;
+        height: 30px;
+        background-image: url('exchangeBtn.jpeg');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        border-radius: 50%;
+        box-shadow: 0 0 0 4px rgba(68, 136, 153, 1);
+    }
 }
 
+@media (max-width: 480px) {
+    body {
+        font-size: 12px;
+    }
+
+    .navbar, .nav-content, .main-content, footer {
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+
+    .title {
+        font-size: 18px;
+    }
+
+    .title-moodsexchange {
+        font-size: 16px;
+    }
+
+    .booking-btn {
+        font-size: 12px;
+        width: 60px;
+        height: 28px;
+    }
+
+    textarea {
+        font-size: 12px;
+        height: 120px;
+    }
+
+    button {
+        font-size: 12px;
+        padding: 6px 12px;
+    }
+
+    .share-btn {
+        font-size: 14px;
+    }
+
+    .nav-content {
+        justify-content: space-between;
+    }
+
+    .title-moodsexchange {
+        font-size: 0; /* 隱藏文字 */
+        width: 30px;
+        height: 30px;
+        background-image: url('exchangeBtn.jpeg');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        border-radius: 50%;
+        box-shadow: 0 0 0 4px rgba(68, 136, 153, 1);
+    }
+}
