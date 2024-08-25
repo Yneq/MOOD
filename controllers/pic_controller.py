@@ -219,7 +219,7 @@ async def toggle_like(message_id: int, current_user: Dict = Depends(get_current_
         
         else:
             insert_like_query = "INSERT INTO likes (user_id, message_id, created_at) VALUES (%s, %s, %s) "
-            cursor.execute(insert_like_query, (user_id, message_id, datetime.now()))
+            cursor.execute(insert_like_query, (user_id, message_id, datetime.now().isoformat()))
             conn.commit()
             return{"liked": True, "message": "Like added"}
 

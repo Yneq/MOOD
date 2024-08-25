@@ -273,32 +273,42 @@ margin-left: 10px;
     background-size: cover;
     background-repeat: no-repeat;
     background-position: center;
-    position: relative;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 0 3px #007bfff7; 
+    margin-bottom: 5px;
 }
 
 .tooltip {
     visibility: hidden;
     opacity: 0;
-    position: absolute;
     background-color: #555;
     color: #fff;
-    text-align: center;
     border-radius: 6px;
-    padding: 5px;
+    padding: 12px;
     transition: opacity 0.3s;
     z-index: 1;
-    right: 23.5%;
-    top: 26%;
+    transform: translateY(-50%);
+    white-space: nowrap;
+    font-size: 14px;
+    margin-left: 10px;
+    display: flex;
+    align-items: center;
 }
 
-/* .tooltip::after {
+.tooltip::before {
     content: "";
     position: absolute;
-    bottom: -10px;
-    left: 10px; 
-    border-width: 10px;
+    top: 50%;
+    right: 100%;
+    margin-top: -5px;
+    border-width: 5px;
     border-style: solid;
-    border-color: #555 transparent transparent transparent;
+    border-color: transparent #555 transparent transparent;
+}
+
+/* .partner-name:hover + .tooltip {
+    visibility: visible;
+    opacity: 1;
 } */
 
 .partnerdiary-entry {
@@ -423,7 +433,7 @@ a {
 .modal {
     height: auto;
     width: 340px;
-    background-color: #2b4564;;
+    background-color: #2b4564;
     border-radius: 6px;
     position: fixed;
     top: 80px;
@@ -551,6 +561,13 @@ a {
 #saveDiaryBtn {
     font-size: 20px;
 }
+
+#saveDiaryBtn:hover {
+    box-shadow: 
+        0 0 22px rgba(104, 204, 229, 0.7),
+        0 0 10px rgba(104, 204, 229, 0.5);
+}
+
 
 .recent-diary-entry {
     margin-bottom: 15px;

@@ -25,17 +25,6 @@ router = APIRouter()
 
 load_dotenv()
 
-# # S3 客戶端設置
-# s3_client = boto3.client("s3", 
-#                         aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-#                         aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-#                         region_name=os.getenv("AWS_REGION"),
-#                         config=Config(signature_version="s3v4"))
-
-# BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
-# CLOUDFRONT_DOMAIN = os.getenv("CLOUDFRONT_DOMAIN")
-
-
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
@@ -43,37 +32,21 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
-# 設置時區
-taipei_tz = pytz.timezone('Asia/Taipei')
+# # 設置時區
+# taipei_tz = pytz.timezone('Asia/Taipei')
 
-def convert_to_taipei_time(dt):
-    if not dt.tzinfo:
-        dt = pytz.UTC.localize(dt)
-    return dt.astimezone(taipei_tz)
+# def convert_to_taipei_time(dt):
+#     if not dt.tzinfo:
+#         dt = pytz.UTC.localize(dt)
+#     return dt.astimezone(taipei_tz)
 
-def convert_date_to_isoformat(date_value):
-    if isinstance(date_value, datetime):
-        return convert_to_taipei_time(date_value).date().isoformat()
-    elif isinstance(date_value, date):
-        return date_value.isoformat()
-    return str(date_value)
+# def convert_date_to_isoformat(date_value):
+#     if isinstance(date_value, datetime):
+#         return convert_to_taipei_time(date_value).date().isoformat()
+#     elif isinstance(date_value, date):
+#         return date_value.isoformat()
+#     return str(date_value)
 
-
-# @router.post("/get_presigned_url")
-# async def get_presigned_url(request: PresigneUrlRequest):
-#     try:
-#         file_key = str(uuid.uuid4()) + "_" + request.filename
-#         presigned_url = s3_client.generate_presigned_url(
-#             'put_object',
-#             Params={'Bucket': BUCKET_NAME, 'Key': file_key},
-#             ExpiresIn=3600,
-#             HttpMethod='PUT'
-#         )
-#         cloudfront_url = f"{CLOUDFRONT_DOMAIN}/{file_key}"
-#         return JSONResponse(content={'url': presigned_url, 'key': file_key, 'cloudfront_url': cloudfront_url})
-#     except Exception as e:
-#         logger.error(f"Error generating presigned URL: {str(e)}", exc_info=True)
-#         raise HTTPException(status_code=500, detail=f"Error generating presigned URL: {str(e)}")
 
 @router.get("/get_diary_entries", response_model=List[DiaryEntryResponse])
 async def get_diary_entries(
@@ -91,8 +64,8 @@ async def get_diary_entries(
         
         for entry in entries:
             entry['date'] = entry['date'].isoformat() 
-            entry['created_at'] = entry['created_at'].replace(tzinfo=pytz.UTC).astimezone(taipei_tz).isoformat()
-            entry['updated_at'] = entry['updated_at'].replace(tzinfo=pytz.UTC).astimezone(taipei_tz).isoformat()
+            entry['created_at'] = datetime.now().isoformat()
+            entry['updated_at'] = datetime.now().isoformat()
         
         return [DiaryEntryResponse(**entry) for entry in entries]
     except mysql.connector.Error as e:
@@ -150,9 +123,9 @@ async def get_diary_entry(
                 raise HTTPException(status_code=404, detail="未找到指定 ID 的日記條目")
             
             # 處理單個條目
-            entry['date'] = entry['date'].isoformat()
-            entry['created_at'] = entry['created_at'].replace(tzinfo=pytz.UTC).astimezone(taipei_tz).isoformat()
-            entry['updated_at'] = entry['updated_at'].replace(tzinfo=pytz.UTC).astimezone(taipei_tz).isoformat()
+            entry['date'] = entry['date'].isoformat() 
+            entry['created_at'] = datetime.now().isoformat()
+            entry['updated_at'] = datetime.now().isoformat()
 
             mood_score = entry.pop('mood_score')
             weather = entry.pop('weather')
@@ -165,7 +138,6 @@ async def get_diary_entry(
         except ValueError:
             # 如果不是 ID，則按原來的方式處理日期查詢
             query_date = datetime.strptime(param, "%Y-%m-%d").date()
-            query_date = taipei_tz.localize(datetime.combine(query_date, datetime.min.time())).date()
             
             query = """
             SELECT 
@@ -205,8 +177,8 @@ async def get_diary_entry(
             
             for entry in entries:
                 entry['date'] = entry['date'].isoformat()
-                entry['created_at'] = entry['created_at'].replace(tzinfo=pytz.UTC).astimezone(taipei_tz).isoformat()
-                entry['updated_at'] = entry['updated_at'].replace(tzinfo=pytz.UTC).astimezone(taipei_tz).isoformat()
+                entry['created_at'] = datetime.now().isoformat()
+                entry['updated_at'] = datetime.now().isoformat()
                 mood_score = entry.pop('mood_score')
                 weather = entry.pop('weather')
                 entry['mood_data'] = MoodData(mood_score=mood_score, weather=weather) if mood_score is not None or weather is not None else None
@@ -237,29 +209,40 @@ async def create_diary_entry(
 
         if not entry.content.strip():
             raise HTTPException(status_code=400, detail="RECORD YOUR MOODs")
-        
-        # 如果沒有提供日期，使用當前的台北時間
+
         if entry.date is None:
-            entry_date = datetime.now(taipei_tz).date()
+            entry_date = datetime.now().date()
         else:
             # 如果提供的是 datetime 或 date，都統一轉換為 date
             if isinstance(entry.date, datetime):
-                entry_date = entry.date.astimezone(taipei_tz).date()
+                entry_date = entry.date.date()
+            elif isinstance(entry.date, str):
+                entry_date = datetime.strptime(entry.date, "%Y-%m-%d").date()
             else:
                 entry_date = entry.date
         
+        # # 如果沒有提供日期，使用當前的台北時間
+        # if entry.date is None:
+        #     entry_date = datetime.now(taipei_tz).date()
+        # else:
+        #     # 如果提供的是 datetime 或 date，都統一轉換為 date
+        #     if isinstance(entry.date, datetime):
+        #         entry_date = entry.date.astimezone(taipei_tz).date()
+        #     else:
+        #         entry_date = entry.date
+        
         # 將當前時間轉換為 UTC
-        now_utc = datetime.now(taipei_tz).astimezone(pytz.UTC)
+        now_iso = datetime.now().isoformat()
 
         query = """
-        INSERT INTO diary_entries(user_id, title, content, date, is_public, image_url, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO diary_entries(user_id, title, content, date, is_public, image_url)
+        VALUES (%s, %s, %s, %s, %s, %s)
         """
         logger.debug(f"Inserting entry with date: {entry_date}")
-        logger.debug(f"Parameters: {current_user['id']}, {entry.title}, {entry.content}, {entry_date}, {entry.is_public}, {entry.image_url}, {now_utc}, {now_utc}")
+        logger.debug(f"Parameters: {current_user['id']}, {entry.title}, {entry.content}, {entry_date}, {entry.is_public}, {entry.image_url}")
 
         cursor.execute(query, (current_user["id"], entry.title, entry.content, entry_date,
-                                entry.is_public, entry.image_url, now_utc, now_utc))
+                                entry.is_public, entry.image_url))
         db.commit()
         new_id = cursor.lastrowid
         logger.debug(f"New entry ID: {new_id}")
@@ -271,8 +254,8 @@ async def create_diary_entry(
         if new_entry:
             # 轉換日期時間字段
             new_entry['date'] = new_entry['date'].isoformat()
-            new_entry['created_at'] = new_entry['created_at'].replace(tzinfo=pytz.UTC).astimezone(taipei_tz).isoformat()
-            new_entry['updated_at'] = new_entry['updated_at'].replace(tzinfo=pytz.UTC).astimezone(taipei_tz).isoformat()
+            new_entry['created_at'] = datetime.now().isoformat()
+            new_entry['updated_at'] = datetime.now().isoformat()
             
             response = DiaryEntryResponse(**new_entry)
             logger.debug(f"Created DiaryEntryResponse: {response}")
@@ -282,9 +265,6 @@ async def create_diary_entry(
     except mysql.connector.Error as e:
         logger.error(f"Database error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"資料庫錯誤: {str(e)}")
-    except ValidationError as e:
-        logger.error(f"Validation error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"發生意外錯誤: {str(e)}")
@@ -312,26 +292,37 @@ async def update_diary_entry(
         if not existing_entry:
             raise HTTPException(status_code=404, detail="日記條目未找到或不屬於當前用戶")
 
-        # 處理日期
+        # # 處理日期
+        # if entry.date is None:
+        #     entry_date = datetime.now(taipei_tz).date()
+        # else:
+        #     if isinstance(entry.date, datetime):
+        #         entry_date = entry.date.astimezone(taipei_tz).date()
+        #     elif isinstance(entry.date, str):
+        #         entry_date = datetime.strptime(entry.date, "%Y-%m-%d").date()
+        #     else:
+        #         entry_date = entry.date
+
         if entry.date is None:
-            entry_date = datetime.now(taipei_tz).date()
+            entry_date = datetime.now().date()
         else:
+            # 如果提供的是 datetime 或 date，都統一轉換為 date
             if isinstance(entry.date, datetime):
-                entry_date = entry.date.astimezone(taipei_tz).date()
+                entry_date = entry.date.date()
             elif isinstance(entry.date, str):
                 entry_date = datetime.strptime(entry.date, "%Y-%m-%d").date()
             else:
                 entry_date = entry.date
 
         # 更新時間（UTC）
-        now_utc = datetime.now(pytz.UTC)
+        now_iso = datetime.now().isoformat()
 
         update_query = """
         UPDATE diary_entries 
         SET title = %s, content = %s, date = %s, is_public = %s, image_url = %s, updated_at = %s
         WHERE id = %s AND user_id = %s
         """
-        params = (entry.title, entry.content, entry_date, entry.is_public, entry.image_url, now_utc, entry_id, current_user["id"])
+        params = (entry.title, entry.content, entry_date, entry.is_public, entry.image_url, now_iso, entry_id, current_user["id"])
 
         logger.debug(f"Executing query: {update_query}")
         logger.debug(f"Parameters: {params}")
@@ -348,8 +339,8 @@ async def update_diary_entry(
         if updated_entry:
             # 轉換日期時間字段
             updated_entry['date'] = updated_entry['date'].isoformat()
-            updated_entry['created_at'] = updated_entry['created_at'].replace(tzinfo=pytz.UTC).astimezone(taipei_tz).isoformat()
-            updated_entry['updated_at'] = updated_entry['updated_at'].replace(tzinfo=pytz.UTC).astimezone(taipei_tz).isoformat()
+            updated_entry['created_at'] = datetime.now().isoformat()
+            updated_entry['updated_at'] = datetime.now().isoformat()
 
             response = DiaryEntryResponse(**updated_entry)
             logger.debug(f"Updated DiaryEntryResponse: {response}")
@@ -407,7 +398,7 @@ async def save_mood_entry(
     try:
         cursor = db.cursor(dictionary=True)
 
-        now_utc = datetime.now(pytz.UTC)
+        now_iso = datetime.now().isoformat()
 
         check_query = "SELECT id FROM mood_entries WHERE user_id = %s AND date = %s"
         cursor.execute(check_query, (current_user["id"], mood_entry.date))
@@ -430,8 +421,8 @@ async def save_mood_entry(
         else:
             # 創建新記錄
             insert_query = """
-            INSERT INTO mood_entries (user_id, mood_score, date, weather, note, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO mood_entries (user_id, mood_score, date, weather, note)
+            VALUES (%s, %s, %s, %s, %s)
             """
             cursor.execute(insert_query, (
                 current_user["id"],
@@ -439,7 +430,6 @@ async def save_mood_entry(
                 mood_entry.date,
                 mood_entry.weather or '',
                 mood_entry.note,
-                now_utc
             ))
             entry_id = cursor.lastrowid
 

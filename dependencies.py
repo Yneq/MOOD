@@ -20,7 +20,7 @@ rds_db_config = {
 	"host": os.getenv("RDS_HOST"),
 	"password": os.getenv("RDS_PASSWORD"),
 	"database": os.getenv("RDS_MOOD"),
-	"time_zone":"-08:00",
+	# "time_zone":"-08:00",
     "connection_timeout": 300,  # 5 分鐘
 }
 

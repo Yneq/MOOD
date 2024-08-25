@@ -84,8 +84,37 @@ function renderMessages() {
     if (message.created_at) {
         const timestampSpan = document.createElement('span');
         timestampSpan.className = 'timestamp';
-        timestampSpan.textContent = new Date(message.created_at).toLocaleString();
-        messageDiv.appendChild(timestampSpan);
+
+    // 檢查 message.created_at 是否是字串
+    if (typeof message.created_at === 'string') {
+        // 直接解析 ISO 格式的時間戳
+        const date = new Date(message.created_at);
+
+        // 檢查日期是否有效
+        if (!isNaN(date.getTime())) {
+            // 將日期轉換為台灣時間（UTC+8）
+            const taiwanDate = new Date(date.getTime() + (8 * 60 * 60 * 1000));
+            
+            timestampSpan.textContent = taiwanDate.toLocaleString('zh-TW', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+        } else {
+            console.error('Invalid date:', message.created_at);
+            timestampSpan.textContent = '無效的日期';
+        }
+    } else {
+        console.error('message.created_at is not a string:', message.created_at);
+        timestampSpan.textContent = '無效的日期格式';
+    }
+
+    messageDiv.appendChild(timestampSpan);
+
+
 
         const messageFooter = document.createElement('div');
         messageFooter.className = 'message-footer';
@@ -408,19 +437,20 @@ if (loginBtn) {
 
 
 function logout() {
-isLoggedIn = false;
-localStorage.removeItem('token');
-localStorage.removeItem('user_name');
-localStorage.removeItem('email');
-updateUserDisplay();
-if (userAvatar) {
-    userAvatar.style.display = 'none';
-}
-console.log('Sign out');
-if (isBoardPage) {
-    window.location.href = '/static/index.html';
-}
-}
+    isLoggedIn = false;
+    localStorage.removeItem('token');
+    localStorage.removeItem('user_name');
+    localStorage.removeItem('email');
+    updateUserDisplay();
+    if (userAvatar) {
+        userAvatar.style.display = 'none';
+        overlay.style.display = 'none';
+    }
+    console.log('Sign out');
+    if (isBoardPage) {
+        window.location.href = '/static/index.html';
+    }
+    }
 
 function showLoginModal() {
     modal_login.style.display = "block";
@@ -684,6 +714,7 @@ if (userAvatar) {
     userAvatar.addEventListener('click', function() {
         if (userProfileModal) {
             userProfileModal.style.display = 'block';
+            overlay.style.display = 'block';
             clearPasswordFields();
             resetPasswordChangeUI();
         }

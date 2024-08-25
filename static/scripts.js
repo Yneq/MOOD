@@ -265,7 +265,7 @@ function connectWebSocket() {
         console.log('WebSocket connection closed:', event);
     };
 
-    // 將 WebSocket 實例存儲在全局變量中，以便在其他地方使用
+    // 將 WebSocket 實例存儲在全局變量
     window.matchWebSocket = ws;
 }
     
@@ -378,7 +378,13 @@ async function respondToMatchRequest(requesterId, action) {
 function updateUserDisplay() {
     const userName = localStorage.getItem('user_name');
     const isLoggedIn = !!localStorage.getItem('token');  // 使用 token 判斷登錄狀態
-    
+
+    if (userAvatar) {
+        userAvatar.style.backgroundImage = '';
+        userAvatar.textContent = '';
+        userAvatar.style.display = 'none';
+    }
+
     if (userName && userAvatar) {
         userAvatar.textContent = userName.charAt(0).toUpperCase();
         userAvatar.style.display = 'flex';
@@ -695,6 +701,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const selectedDateElement = document.getElementById('selectedDate');
         const recentDiariesContainer = document.getElementById('recentDiaries');
         const deleteDiaryBtn = document.getElementById('deleteDiaryBtn');
+        const postToPublicBtn = document.getElementById('postToPublicBtn')
 
         if (stars.length > 0) {
             stars.forEach(star => {
@@ -788,6 +795,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadDiaryEntry(new Date());
 
     saveDiaryBtn.addEventListener('click', saveDiaryEntry);
+
+    if (postToPublicBtn) {
+        postToPublicBtn.addEventListener('click', postToPublic); // match頁面不裝ToPublicBtn
+    }
+
+
     function saveDiaryEntry() {
         const now = Date.now();
         const timeElapsed = now - lastSaveTime;
@@ -803,6 +816,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 如果通過冷卻檢查，禁用按鈕
         saveDiaryBtn.disabled = true;
+        if (postToPublicBtn) {
+            postToPublicBtn.disabled = true;
+        }
 
         const content = diaryContent.value.trim();
         const token = localStorage.getItem('token');
@@ -814,6 +830,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!content) {
             showMessage(document.querySelector('.fail-message'), 'EMPTY MOODs');
             saveDiaryBtn.disabled = false;  // 重新啟用按鈕
+            if (postToPublicBtn) postToPublicBtn.disabled = false;
             return;
         }
         
@@ -822,6 +839,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!selectedDate) {
             showMessage(document.querySelector('.fail-message'), 'No date selected');
             saveDiaryBtn.disabled = false;  // 重新啟用按鈕
+            if (postToPublicBtn) postToPublicBtn.disabled = false;
             return;
         }
         
@@ -843,6 +861,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         // 保存心情數據
+        
         fetch('/save_mood_entry', {
             method: 'POST',
             headers: {
@@ -878,12 +897,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         .then(response => response.json())
         .then(data => {
             if (data.id) {
-                showMessage(document.querySelector('.success-self-info'), 'Diary saved successfully!');
+                showMessage(document.querySelector('.success-message'), 'Diary saved successfully!');
                 currentEntryId = data.id;
                 saveDiaryBtn.textContent = 'UPDATE';
-
-                // 更新顯示的日記內容
-                // diaryContent.value = content;
 
                 updateCalendar(new Date().getFullYear(), new Date().getMonth() + 1);
                 loadRecentDiaries();
@@ -900,9 +916,91 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 5秒後重新啟用保存按鈕
             setTimeout(() => {
                 saveDiaryBtn.disabled = false;
+                if (postToPublicBtn) postToPublicBtn.disabled = false;
             }, SAVE_COOLDOWN);
         });
     }
+
+    async function postToPublic() {
+        const now = Date.now();
+        const timeElapsed = now - lastSaveTime;
+
+        if (timeElapsed < SAVE_COOLDOWN) {
+            const remainingTime = Math.ceil((SAVE_COOLDOWN - timeElapsed) / 1000);
+            console.log('Cooldown active, remaining time:', remainingTime);
+            showMessage(document.querySelector('.fail-message'), `Please wait ${remainingTime} seconds before saving again.`);
+            return;
+        }
+        postToPublicBtn.disabled = true;
+
+        const text = diaryContent.value.trim();
+        const imageUrl = ''; // 私人日記不上傳圖片，但我們仍然傳送一個空字串
+
+        const token = localStorage.getItem('token');
+        if (!token) {
+            showMessage(document.querySelector('.fail-message'), 'Please sign in first');
+            return;
+        }
+
+        if (!text) {
+            showMessage(document.querySelector('.fail-message'), 'EMPTY MOODs');
+            saveDiaryBtn.disabled = false;  // 重新啟用按鈕
+            postToPublicBtn.disabled = false;
+            return;
+        }
+
+        const selectedDate = document.getElementById('selectedDate').textContent;
+        if (!selectedDate) {
+            showMessage(document.querySelector('.fail-message'), 'No date selected');
+            saveDiaryBtn.disabled = false;  // 重新啟用按鈕
+            postToPublicBtn.disabled = false;
+            return;
+        }
+
+        // 準備要發送的數據
+
+        const diaryData = {
+            title: "Diary Entry",
+            content: text,
+            date: selectedDate,
+            is_public: false
+        };
+
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                showMessage(document.querySelector('.fail-message'),'Please Signin First');
+                return;
+            }
+    
+            const response = await fetch('/save_message', {
+                method: 'POST',
+                body: JSON.stringify({ text, imageUrl }),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+    
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+    
+            showMessage(document.querySelector('.success-message'),'Post to public sucessfully');
+            lastSubmitTime = now;
+        } catch (error) {
+            console.error('發佈錯誤:', error);
+            showMessage(document.querySelector('.fail-message'), 'To-Public Failed, Please try again later');
+        } finally {
+            setTimeout(() => {
+                if (postToPublicBtn) postToPublicBtn.disabled = false;
+                saveDiaryBtn.disabled = false;
+            }, SAVE_COOLDOWN);
+        }
+    }
+
+
+    
     
 
      // 在頁面加載時檢查今天的日記
@@ -1299,7 +1397,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     
     async function deleteDiaryEntry(entryId) {
-        console.log('Deleting diary entry with ID:', entryId);
 
         const now = Date.now();
         const timeElapsed = now - lastDeleteTime;
@@ -1339,7 +1436,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
                 const data = await response.json();
                 if (data.message) {
-                    showMessage(document.querySelector('.success-self-info'), 'Diary entry successfully deleted');
+                    showMessage(document.querySelector('.success-message'), 'Diary entry successfully deleted');
                     
                     await loadRecentDiaries(); // 重新載入最近的日記列表
                     await updateCalendar(new Date().getFullYear(), new Date().getMonth() + 1); // 更新日曆
@@ -1405,8 +1502,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const changePasswordBtn = document.getElementById('change-password-btn');
     const passwordFields = document.getElementById('password-fields');
 
-    const currentUserAvatar = loadUserAvatar();
-
     if (userAvatar && avatarPreview) {
         try {
             const avatarUrl = await loadUserAvatar();
@@ -1457,6 +1552,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         userAvatar.addEventListener('click', function() {
             if (userProfileModal) {
                 userProfileModal.style.display = 'block';
+                overlay.style.display = 'block';
                 clearPasswordFields();
                 resetPasswordChangeUI();
             }

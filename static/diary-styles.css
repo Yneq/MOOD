@@ -35,6 +35,7 @@ body {
 
 .user-avatar {
     width: 32px;
+    height: 32px;
     border-radius: 50%;
     background-color: #234064e0;
     color: white;
@@ -46,6 +47,8 @@ body {
     background-size: cover;
     background-repeat: no-repeat;
     background-position: center;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 0 4px #007bfff7; 
   }
 
 #loginBtn {
@@ -79,6 +82,9 @@ margin-left: 10px;
     background-size: cover;
     background-repeat: no-repeat;
     background-position: center;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 0 4px #007bfff7;
+    margin-bottom: 5px;
 }
 
 #self-intro {
@@ -246,6 +252,31 @@ margin-left: 10px;
     border-radius: 15px;
     padding: 20px;
     box-sizing: border-box;
+}
+
+.diary-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.post-to-public-btn {
+    background-color:#234064;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+.post-to-public-btn:hover {
+    background-color:#234064;
+    box-shadow: 
+        0 0 22px rgba(104, 204, 229, 0.7),
+        0 0 10px rgba(104, 204, 229, 0.5);
 }
 
 .moodsDate {
@@ -472,6 +503,12 @@ a {
     font-size: 20px;
 }
 
+#saveDiaryBtn:hover {
+    box-shadow: 
+        0 0 22px rgba(104, 204, 229, 0.7),
+        0 0 10px rgba(104, 204, 229, 0.5);
+}
+
 .diary-actions {
     display: flex;
     align-items: center;
@@ -506,7 +543,20 @@ a {
 
 .star.active, .star:hover {
     color: #FFD700;
+    text-shadow: 
+        0 0 22px rgba(104, 204, 229, 0.7),
+        0 0 10px rgba(104, 204, 229, 0.5);
 }
+
+/* .star {
+    background: none;
+    border: none;
+    outline: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+} */
+
 
 .rating-value {
     margin-left: 10px;
