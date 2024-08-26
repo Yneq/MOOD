@@ -29,9 +29,13 @@ class User:
         self.last_matched: Optional[date] = None
         self.current_exchange_partner: Optional[int] = None
         self.pending_requests: List[int] = []  # 新增：儲存待處理的請求ID
+        self.like_count: int = 0
+        self.weather_counts: Dict[str, int] = {
+                        'sunny': 0, 'cloudy': 0, 'rainy': 0, 'snowy': 0, 'windy': 0
+        }
+        self.mood_score: float = 0.0
 
-    # def add_diary_entry(self, entry: DiaryEntryResponse):
-    #     self.diary_entries.append(entry)
+
 
     def calculate_posting_frequency(self):
         if not self.diary_entries:
@@ -54,10 +58,24 @@ async def daily_matching(db: mysql.connector.connection.MySQLConnection = Depend
     cursor = db.cursor(dictionary=True)
     today = datetime.now(pytz.utc).date()
     cursor.execute("""
-        SELECT u.id, um.partner_id, um.match_date 
-        FROM users u 
-        LEFT JOIN user_matches um ON u.id = um.user_id AND um.match_date = %s
-    """, (today,))
+        SELECT users.id,
+        user_matches.partner_id,
+        user_matches.match_date,
+        COUNT(likes.user_id) as like_count,
+        AVG(mood_entries.mood_score) as avg_mood_score,
+        SUM(CASE WHEN mood_entries.weather = 'sunny' THEN 1 ELSE 0 END) as sunny_count,
+               SUM(CASE WHEN mood_entries.weather = 'cloudy' THEN 1 ELSE 0 END) as cloudy_count,
+               SUM(CASE WHEN mood_entries.weather = 'rainy' THEN 1 ELSE 0 END) as rainy_count,
+               SUM(CASE WHEN mood_entries.weather = 'snowy' THEN 1 ELSE 0 END) as snowy_count,
+               SUM(CASE WHEN mood_entries.weather = 'windy' THEN 1 ELSE 0 END) as windy_count
+        FROM users
+        LEFT JOIN user_matches ON users.id = user_matches.user_id AND user_matches.match_date = %s
+        LEFT JOIN likes ON likes.user_id = users.id
+        LEFT JOIN mood_entries ON mood_entries.user_id = users.id
+        WHERE mood_entries.date >= %s
+        GROUP BY users.id, user_matches.partner_id, user_matches.match_date
+    """, (today, today-timedelta(days=30)))
+
     user_data = cursor.fetchall()
     cursor.close()
 
@@ -66,13 +84,23 @@ async def daily_matching(db: mysql.connector.connection.MySQLConnection = Depend
         user = User(data['id'])
         user.last_matched = data.get('match_date')
         user.current_exchange_partner = data.get('partner_id')
+        user.like_count = data.get('like_count') or 0
+        user.avg_mood_score = data.get('avg_mood_score') or 0
+        user.weather_counts = {
+            'sunny': data.get('sunny_count') or 0,
+            'cloudy': data.get('cloudy_count') or 0,
+            'rainy': data.get('rainy_count') or 0,
+            'snowy': data.get('snowy_count') or 0,
+            'windy': data.get('windy_count') or 0
+        }
+
 
         if user.last_matched == today or user.current_exchange_partner is not None:
             continue
 
         diary_entries = await get_diary_entries(skip=0, limit=100, current_user={"id": user.id}, db=db)
         for entry in diary_entries:
-            user.diary_entry.append(entry)
+            user.diary_entry.append(diary_entries)
         user.calculate_posting_frequency()
         users.append(user)    
 
@@ -89,33 +117,11 @@ async def daily_matching(db: mysql.connector.connection.MySQLConnection = Depend
 
     return matches
 
-def update_user_match_status(db: mysql.connector.connection.MySQLConnection, user_id: int, partner_id: int, match_date: date):
-    cursor = db.cursor()
-    try:
-        cursor.execute(
-            "INSERT INTO user_matches (user_id, partner_id, match_date) VALUES (%s, %s, %s)",
-            (user_id, partner_id, match_date)
-        )
-        db.commit()
-    except mysql.connector.Error as err:
-        print(f"Error: {err}")
-        db.rollback()
-    finally:
-        cursor.close()
-
 def calculate_similarity(user1: User, user2: User, target_keyword: str=None) -> float:
-    # common_interests = set(user1.interests) & set(user2, interests)
-    # interest_similarity = len(common_interests)/max(len(user1.interests), len(user2.interests), 1)
-
-    # # K寫作相似度
-    # style_similarity = sum(min(user1.writing_style.get(k, 0), user2.writing_style.get(k, 0))
-    #                         for k in set(user1.writing_style) | set(user2.writing_style))
-
     user1_keywords = user1.get_all_keywords()
     user2_keywords = user1.get_all_keywords()
     all_keywords = user1_keywords | user2_keywords
 
-    # 先設定target_keyword
     # target_keyword = "olympic"
     if not all_keywords:
         keyword_similarity = 0
@@ -129,7 +135,29 @@ def calculate_similarity(user1: User, user2: User, target_keyword: str=None) -> 
     freq_diff = abs(user1.posting_frequency - user2.posting_frequency)
     freq_similarity = 1 / (1 + freq_diff)  # 頻率差異越小，相似度越高
 
-    return 0.7 * keyword_similarity + 0.3 * freq_similarity
+    # 計算點讚數相似度（希望活潑的配對不那麼活潑的）
+    like_diff = abs(user1.like_count-user2.like_count)
+    like_similarity = 1/(like_diff + 1)
+
+    # 計算天氣偏好相似度（希望天氣相似的配對）
+    all_weather_types = set(user1.weather_counts.keys()) | set(user2.weather_counts.keys())
+
+    similarity = sum(min(user1.weather_counts.get(w, 0), user2.weather_counts.get(w, 0)) for w in all_weather_types)
+    total_weather = sum(user1.weather_counts.values()) + sum(user2.weather_counts.values())
+
+    weather_similarity = similarity / total_weather if total_weather > 0 else 0
+
+    # 計算心情分數相似度（希望心情好的配對心情不好的）
+    mood_diff = abs(user1.avg_mood_score - user2.avg_mood_score)
+    mood_similarity = 1/(mood_diff + 1)
+
+    return (
+        0.25 * keyword_similarity +
+        0.20 * freq_similarity +
+        0.15 * like_similarity +
+        0.20 * weather_similarity +
+        0.20 * mood_similarity
+    )
 
 
 router = APIRouter()
@@ -338,9 +366,14 @@ async def request_exchange(
 
         db.commit()
         return {"message": "Your match request is on its way!", "status": "success", "partner_id": partner['id']}
-    
+        
+    except mysql.connector.Error as e:
+        db.rollback()
+        logger.error(f"Database error in request_exchange: {str(e)}")
+        raise HTTPException(status_code=500, detail="資料庫錯誤，請稍後再試")
     except Exception as e:
         db.rollback()
+        logger.error(f"Database error in request_exchange: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     
     finally:

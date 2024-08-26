@@ -26,18 +26,20 @@ function initializeMatchPage() {
     // setInterval(checkMatchStatus, 60000); // 每分鐘檢查一次
 }
 
-// 定義 handleExchangeRequest 函數
 async function handleExchangeRequest() {
     try {
         const token = localStorage.getItem('token');
-        const response = await fetch('/matching/request_exchange', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-        });
-        
+
+        const response = await retryOperation(() => 
+            fetch('/matching/request_exchange', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+            })
+        );
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -62,7 +64,7 @@ async function handleExchangeRequest() {
         if (error.response) {
             console.error('Error response:', await error.response.text());
         }        
-        showNotification('An error occurred, please try again later.');
+        showNotification('Your partner\'s diary is still empty! Maybe they\'re busy exploring a magical world');
     }
 }
 
@@ -70,11 +72,14 @@ const partnerDiaryContent = document.getElementById('partnerDiaryContent');
 async function checkMatchStatus() {
     try {
         const token = localStorage.getItem('token');
-        const response = await fetch('/matching/status', {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
+
+        const response = await retryOperation(() => 
+            fetch('/matching/status', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+        )
 
         const data = await response.json();
         console.log('Match status response:', data);
@@ -146,9 +151,9 @@ async function checkMatchStatus() {
         }
     } catch (error) {
         console.error('Error in checkMatchStatus:', error);
-        showNotification('An error occurred while checking match status.');
+        showNotification('Your partner\'s diary is still empty! Maybe they\'re busy exploring a magical world');
         if (partnerDiaryContent) {
-            partnerDiaryContent.innerHTML = '<p>An error occurred. Please try again later.</p>';
+            partnerDiaryContent.innerHTML = '<p>Your partner\'s diary is still empty! Maybe they\'re busy exploring a magical world</p>';
         }
     }
 }
@@ -158,11 +163,13 @@ async function loadPartnerDiary(partnerId) {
 
     try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`/get_partner_diary/${partnerId}`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
+        const response = await retryOperation(() => 
+            fetch(`/get_partner_diary/${partnerId}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+        )
 
         if (response.status === 403) {
             // 匹配已經結束，更新 UI
@@ -227,10 +234,10 @@ async function loadPartnerDiary(partnerId) {
         console.error('Error loading partner diary:', error);
         console.error('Error stack:', error.stack);
         const errorMessage = error.message || 'Failed to load partner diary';
-        showNotification(`Error: ${errorMessage}. Please try again later.`);
+        showNotification(`Your partner\'s diary is still empty! Maybe they\'re busy exploring a magical world`);
         
         if (partnerDiaryContent) {
-            partnerDiaryContent.innerHTML = `<p>Error: ${errorMessage}</p>`;
+            partnerDiaryContent.innerHTML = `Your partner\'s diary is still empty! Maybe they\'re busy exploring a magical world`;
         }
     }
 }
@@ -375,28 +382,48 @@ async function respondToMatchRequest(requesterId, action) {
     }
 }
 
-function updateUserDisplay() {
-    const userName = localStorage.getItem('user_name');
-    const isLoggedIn = !!localStorage.getItem('token');  // 使用 token 判斷登錄狀態
+const avatarPreview = document.getElementById('avatar-preview');
+const selfIntroElement = document.getElementById('self-intro');
 
-    if (userAvatar) {
-        userAvatar.style.backgroundImage = '';
-        userAvatar.textContent = '';
-        userAvatar.style.display = 'none';
-    }
+async function updateUserDisplay() {
+        const userName = localStorage.getItem('user_name');
+        const isLoggedIn = !!localStorage.getItem('token');
+        const avatarUrl = await loadUserAvatar();
 
-    if (userName && userAvatar) {
-        userAvatar.textContent = userName.charAt(0).toUpperCase();
-        userAvatar.style.display = 'flex';
-    } else if (userAvatar) {
-        userAvatar.style.display = 'none';
-    }
+        if (userAvatar) {
+            userAvatar.style.backgroundImage = '';
+            userAvatar.textContent = '';
+            userAvatar.style.display = 'none';
+            selfIntroElement.inpute = '';
+        }
 
-    if (loginBtn) {
-        loginBtn.textContent = isLoggedIn ? 'Sign out' : 'Sign in';
-    } else {
-        console.error('Login button not found');
-    }
+        if (selfIntroElement) {
+            const savedSelfIntro = localStorage.getItem('selfIntro');
+            if (savedSelfIntro) {
+                selfIntroElement.value = savedSelfIntro;
+            }
+        }
+
+        if (userName && userAvatar) {
+            userAvatar.textContent = userName.charAt(0).toUpperCase();
+            userAvatar.style.display = 'flex';
+            
+            if (avatarUrl != null) {
+                avatarPreview.style.backgroundImage = `url('${avatarUrl}')`;
+            } else {
+                // 使用 CSS 中定義的默認頭像
+                avatarPreview.style.backgroundImage = '';
+            }
+        } else if (userAvatar) {
+            userAvatar.style.display = 'none';
+        }
+
+        if (loginBtn) {
+            loginBtn.textContent = isLoggedIn ? 'Sign out' : 'Sign in';
+        } else {
+            console.error('Login button not found');
+        }
+        loadUserAvatar()
 }
 
 async function loadUserAvatar(targetUserId = null) {
@@ -405,7 +432,6 @@ async function loadUserAvatar(targetUserId = null) {
         const currentUserId = localStorage.getItem('user_id');
 
         if (!token || !currentUserId) {
-            console.error('No token or user ID found');
             return;
         }
 
@@ -463,7 +489,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
     if (isLoggedIn) {
-        updateUserDisplay();
+        await updateUserDisplay();
         if (isMatchPage) {
             initializeMatchPage();
         }
@@ -473,7 +499,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
 
-    updateUserDisplay();
+    // await updateUserDisplay();
     
     // 登入按鈕事件
     if (loginBtn) {
@@ -513,13 +539,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    function handleLogout() {
+    async function handleLogout() {
         localStorage.clear();
         if (window.matchWebSocket) {
             window.matchWebSocket.close();
         }
         isLoggedIn = false;
-        updateUserDisplay();
+        await updateUserDisplay();
         if (userAvatar) {
             userAvatar.style.display = 'none';
         }
@@ -1498,7 +1524,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const userProfileModal = document.getElementById('user-profile-modal');
     const profileForm = document.getElementById('profile-form');
     const avatarUpload = document.getElementById('avatar-upload');
-    const avatarPreview = document.getElementById('avatar-preview');
     const changePasswordBtn = document.getElementById('change-password-btn');
     const passwordFields = document.getElementById('password-fields');
 
@@ -1586,7 +1611,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         passwordFields.style.display = passwordFields.style.display === 'none' ? 'block' : 'none';
     });
 
-    const selfIntroElement = document.getElementById('self-intro');
     if (selfIntroElement) {
         const savedSelfIntro = localStorage.getItem('selfIntro');
         if (savedSelfIntro) {
@@ -1715,8 +1739,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 }
 
-
 }); //DOM尾部==========================
+
+// 添加重試邏輯的輔助函數
+async function retryOperation(operation, maxRetries = 3, delay = 1000) {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await operation();
+        } catch (error) {
+            if (i === maxRetries - 1) throw error;
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+}
 
 // jQuery 代碼
 $(document).ready(function () {
