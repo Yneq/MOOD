@@ -217,6 +217,11 @@ button:hover {
     font-size: 20px;
     border-radius: 10px;
 }
+.share-btn:hover {
+    box-shadow: 
+        0 0 22px rgba(104, 204, 229, 0.7),
+        0 0 10px rgba(104, 204, 229, 0.5);
+}
 
 .choose-file {
     display: flex;
@@ -293,6 +298,8 @@ button:hover {
     display: none;
 }
 
+
+
 /* 自定義文件選擇按鈕樣式 */
 .custom-file-upload {
     display: inline-block;
@@ -307,7 +314,9 @@ button:hover {
 }
 
 .custom-file-upload:hover {
-    background-color: #538a8a;
+    box-shadow: 
+        0 0 22px rgba(104, 204, 229, 0.7),
+        0 0 10px rgba(104, 204, 229, 0.5);
 }
 
 .delete-button {
@@ -549,7 +558,7 @@ a {
     }
 
     textarea {
-        font-size: 14px;
+        font-size: 15px;
         height: 150px;
     }
 
@@ -584,7 +593,7 @@ a {
 
 @media (max-width: 480px) {
     body {
-        font-size: 12px;
+        font-size: 15px;
     }
 
     .navbar, .nav-content, .main-content, footer {
@@ -607,7 +616,7 @@ a {
     }
 
     textarea {
-        font-size: 12px;
+        font-size: 15px;
         height: 120px;
     }
 
