@@ -714,10 +714,10 @@ async def create_pdf_response(entries):
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
 
-    pdfmetrics.registerFont(TTFont('NotoSansTC', 'NotoSansTC-VariableFont_wght.ttf'))
+    pdfmetrics.registerFont(TTFont('NotoSansCJK', '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'))
 
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name='Chinese', fontName='NotoSansTC', fontSize=12))
+    styles.add(ParagraphStyle(name='Chinese', fontName='NotoSansCJK', fontSize=12))
 
     title = Paragraph("My Mood Diary", styles['Title'])
     elements.append(title)
@@ -743,7 +743,7 @@ async def create_pdf_response(entries):
         ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
         ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 1), (-1, -1), 'NotoSansTC'),  # 使用支持中文的字體
+        ('FONTNAME', (0, 1), (-1, -1), 'NotoSansCJK'),  # 使用支持中文的字體
         ('FONTSIZE', (0, 1), (-1, -1), 12),
         ('TOPPADDING', (0, 1), (-1, -1), 6),
         ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
