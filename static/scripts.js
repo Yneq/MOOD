@@ -739,7 +739,55 @@ document.addEventListener('DOMContentLoaded', async () => {
         const selectedDateElement = document.getElementById('selectedDate');
         const recentDiariesContainer = document.getElementById('recentDiaries');
         const deleteDiaryBtn = document.getElementById('deleteDiaryBtn');
-        const postToPublicBtn = document.getElementById('postToPublicBtn')
+        const postToPublicBtn = document.getElementById('postToPublicBtn');
+        const downloadBtn = document.getElementById('downloadMyMoods');
+
+        if(downloadBtn) {
+            downloadBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const token = localStorage.getItem('token');
+                if(!token) {
+                    showMessage(document.querySelector('.fail-message'), `Please sign-in first`);
+                    return;
+                }
+                
+                const format = prompt('Type one of download formats (json, csv, pdf):').toLowerCase();
+
+                if (!['json', 'csv', 'pdf'].includes(format)) {
+                    showMessage(document.querySelector('.fail-message'), `Please type one format`);
+                    return;
+                }
+
+                fetch (`/download_moods/${format}`, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                .then (response => {
+                    if (!response.ok) {
+                        throw new Error('Download Failed');
+                    }
+                    return response.blob(); // 總是返回 blob，包括 JSON
+                })
+                .then (blob => {
+                    downloadBlob(blob, `my_moods.${format}`);
+                })
+                .catch(error => {
+                    console.error('Download Failed', error);
+                    showMessage(document.querySelector('.fail-message'), `Download Failed, Please try again later`);
+                });
+            });
+        }
+
+        function downloadBlob(blob, filename) {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
 
         if (stars.length > 0) {
             stars.forEach(star => {
@@ -767,6 +815,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (weatherSelect) {
             weatherSelect.addEventListener('change', function() {
                 currentWeather = this.value;
+                if (this.selectedIndex === 0) {
+                    currentWeather = null;
+                }
             });
         } else {
             console.log('Weather select element not found');
@@ -1036,13 +1087,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, SAVE_COOLDOWN);
         }
     }
-
-
-    
-    
-
-     // 在頁面加載時檢查今天的日記
-    // checkTodayDiary();
     
     // 在頁面加載時初始化日曆
     if (isDiaryPage) {
@@ -1240,6 +1284,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (weatherSelect) {
             weatherSelect.value = currentWeather || '';
+            if (!currentWeather) {
+                weatherSelect.selectedIndex = 0;
+            }
         }
     }
     
@@ -1254,7 +1301,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             ratingValue.textContent = '';
         }
         if (weatherSelect) {
-            weatherSelect.value = '';
+            weatherSelect.selectedIndex = 0; // 重置為預設選項
         }
     }
     
@@ -1445,7 +1492,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        if (confirm('Are you sure you want to delete this diary entry? This action cannot be undone.')) {
+        if (confirm('Are you sure you want to delete this diary entry? This action cannot be undone')) {
             const token = localStorage.getItem('token');
             if (!token) {
                 showMessage(document.querySelector('.fail-message'), 'DELETED FAIL');
@@ -1506,7 +1553,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadDiaryEntry(new Date());
     loadRecentDiaries(); // 頁面加載時載入最近的日記
 
-    
+
     } // 只在 diary.html 頁面執行的代碼尾部=========================
 
     function showMessage(element, message, delay = 0) {

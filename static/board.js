@@ -344,6 +344,9 @@ async function deleteMessage(messageId) {
         console.error('Invalid message ID');
         return;
     }
+    if (!confirm('Are you sure you want to delete this diary entry? This action cannot be undone')) {
+        return; // 如果用戶取消，則不執行刪除操作
+    }
     try {
         const token = localStorage.getItem('token');
         const response = await fetch(`/delete_message/${messageId}`, {

@@ -1,5 +1,5 @@
-from fastapi import FastAPI, HTTPException, APIRouter, Depends
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, APIRouter, Depends, Query
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from pydantic import BaseModel
 import mysql.connector
 from mysql.connector import Error
@@ -16,6 +16,19 @@ from dependencies import get_db, get_current_user
 import pytz
 import redis.asyncio as redis
 import json
+import io
+import csv
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics
+
+
+
+
 
 
 
@@ -66,14 +79,14 @@ async def get_diary_entries(
     try:
         # 首先檢查是否有新的日記條目
         cursor = db.cursor(dictionary=True)
-        check_query = "SELECT MAX(updated_at) as last_update FROM diary_entries WHERE user_id = %s"
+        check_query = "SELECT MAX(id) as last_id FROM diary_entries WHERE user_id = %s"
         cursor.execute(check_query, (current_user["id"],))
-        last_update = cursor.fetchone()['last_update']
+        last_id = cursor.fetchone()['last_id']
 
-        cached_last_update = await redis_client.get(f"{cache_key}:last_update")
+        cached_last_id = await redis_client.get(f"{cache_key}:last_id")
 
         # 如果沒有緩存或者有新的更新，則查詢數據庫
-        if not cached_last_update or (last_update and str(last_update) > cached_last_update):
+        if not cached_last_id or (last_id and str(last_id) > cached_last_id):
             query = "SELECT * FROM diary_entries WHERE user_id = %s ORDER BY date DESC LIMIT %s OFFSET %s"
             cursor.execute(query, (current_user["id"], limit, skip))
             entries = cursor.fetchall()
@@ -86,14 +99,16 @@ async def get_diary_entries(
             entries_response = [DiaryEntryResponse(**entry) for entry in entries]
 
             await redis_client.set(cache_key, json.dumps([entry.dict() for entry in entries_response]), ex=300)  # 設置5分鐘過期
-            if last_update:
-                await redis_client.set(f"{cache_key}:last_update", str(last_update), ex=300)
+            if last_id:
+                await redis_client.set(f"{cache_key}:last_id", str(last_id), ex=300)
                 
             return entries_response
         else:
             # 如果沒有新的更新，使用緩存的數據
             cached_entries = await redis_client.get(cache_key)
+
             return json.loads(cached_entries)
+
     except mysql.connector.Error as e:
         logger.error(f"Database error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"資料庫錯誤: {str(e)}")
@@ -117,9 +132,14 @@ async def get_diary_entry(
     except ValueError:
         cache_key = f"diary_entries_date:{current_user['id']}:{param}"
 
+    logger.debug(f"Checking cache with key: {cache_key}")
+
     cached_entry = await redis_client.get(cache_key)
     if cached_entry:
+        logger.info(f"Cache hit for key: {cache_key}")        
         return json.loads(cached_entry)
+    else:
+        logger.info(f"Cache miss for key: {cache_key}")
 
     cursor = None
     try:
@@ -168,10 +188,11 @@ async def get_diary_entry(
             entry['mood_data'] = MoodData(mood_score=mood_score, weather=weather) if mood_score is not None or weather is not None else None
 
             response = DiaryEntryResponse(**entry)
-            if isinstance(response, list):
-                await redis_client.set(cache_key, json.dumps([entry.dict() for entry in response]), ex=3600)
-            else:
-                await redis_client.set(cache_key, json.dumps(response.dict()), ex=3600)
+
+            logger.debug(f"Setting cache for key: {cache_key}")
+            await redis_client.set(cache_key, json.dumps(response.dict()), ex=3600)
+            logger.debug(f"Cache set for key: {cache_key}")
+
             logger.debug(f"Processed entry: {entry}")
             return response
         
@@ -222,8 +243,14 @@ async def get_diary_entry(
                 weather = entry.pop('weather')
                 entry['mood_data'] = MoodData(mood_score=mood_score, weather=weather) if mood_score is not None or weather is not None else None
 
+            response = [DiaryEntryResponse(**entry) for entry in entries]
+
+            logger.debug(f"Setting cache for key: {cache_key}")
+            await redis_client.set(cache_key, json.dumps([entry.dict() for entry in response]), ex=3600)
+            logger.debug(f"Cache set for key: {cache_key}")
+
             logger.debug(f"Returning entries: {entries}")
-            return [DiaryEntryResponse(**entry) for entry in entries]
+            return response
         
     except mysql.connector.Error as e:
         logger.error(f"Database error: {str(e)}", exc_info=True)
@@ -234,6 +261,23 @@ async def get_diary_entry(
     finally:
         if cursor:
             cursor.close()
+
+# 新增：在函數結束前添加一個緩存驗證步驟
+    try:
+        verification = await redis_client.get(cache_key)
+        if verification:
+            logger.info(f"Cache verification successful for key: {cache_key}")
+        else:
+            logger.warning(f"Cache verification failed for key: {cache_key}")
+    except Exception as e:
+        logger.error(f"Error during cache verification: {str(e)}")
+
+
+# 新增: 在寫入操作後清除緩存的函數
+async def clear_diary_cache(user_id: int, date: str):
+    cache_key = f"diary_entries_date:{user_id}:{date}"
+    await redis_client.delete(cache_key)
+
 
 @router.post("/create_diary_entry", response_model=DiaryEntryResponse)
 async def create_diary_entry(
@@ -291,6 +335,7 @@ async def create_diary_entry(
 
             # 清除日記列表的快取
             await redis_client.delete(f"diary_entries:{current_user['id']}:*")
+            await redis_client.delete(f"diary_entry:{current_user['id']}:{new_id}")
 
             return response
         else:
@@ -370,6 +415,7 @@ async def update_diary_entry(
             # 清除相關快取
             await redis_client.delete(f"diary_entries:{current_user['id']}:*")
             await redis_client.delete(f"diary_entry:{current_user['id']}:{entry_id}")
+
             return response
         else:
             raise HTTPException(status_code=404, detail="更新後的條目無法找到")
@@ -612,3 +658,105 @@ async def get_user_avatar(
         raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
     finally:
         cursor.close()
+
+@router.get("/download_moods/{format}")
+async def download_moods(
+    format: str,
+    current_user: dict = Depends(get_current_user),
+    db: mysql.connector.connection.MySQLConnection = Depends(get_db)
+):
+    try:
+        cursor = db.cursor(dictionary=True)
+        query = "SELECT * FROM diary_entries WHERE user_id = %s ORDER BY date DESC"
+        cursor.execute(query, (current_user["id"],))
+        entries = cursor.fetchall()
+
+        for entry in entries:
+            entry['date'] = entry['date'].isoformat()
+            entry['created_at'] = entry['created_at'].isoformat()
+            entry['updated_at'] = entry['updated_at'].isoformat()
+
+        if format == 'json':
+            return create_json_response(entries)
+        elif format == 'csv':
+            return create_csv_response(entries)
+        elif format == 'pdf':
+            return await create_pdf_response(entries)
+
+    except mysql.connector.Error as e:
+        raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
+    finally:
+        cursor.close()
+
+def create_json_response(entries):
+    json_data = json.dumps(entries, ensure_ascii=False, indent=2)
+    return StreamingResponse(
+        io.StringIO(json_data),
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=my_moods.json"}
+    )
+
+def create_csv_response(entries):
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=entries[0].keys())
+    writer.writeheader()
+    for entry in entries:
+        writer.writerow(entry)
+    output.seek(0)
+    return StreamingResponse(
+        io.StringIO(output.getvalue()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=my_moods.csv"}
+    )
+
+async def create_pdf_response(entries):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    elements = []
+
+    pdfmetrics.registerFont(TTFont('NotoSansTC', 'NotoSansTC-VariableFont_wght.ttf'))
+
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name='Chinese', fontName='NotoSansTC', fontSize=12))
+
+    title = Paragraph("My Mood Diary", styles['Title'])
+    elements.append(title)
+
+    data = [['Date', 'Content']]
+    for entry in entries:
+        data.append([
+            entry['date'],
+            Paragraph(entry['content'], styles['Chinese'])
+        ])
+
+    page_width = letter[0]
+    col_widths = [page_width * 0.25, page_width * 0.75]  # 25% 給日期，75% 給內容
+
+    table = Table(data, colWidths=col_widths)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),  # 改為左對齊
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 14),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 1), (-1, -1), 'NotoSansTC'),  # 使用支持中文的字體
+        ('FONTSIZE', (0, 1), (-1, -1), 12),
+        ('TOPPADDING', (0, 1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # 垂直對齊頂部
+        ('WORDWRAP', (0, 0), (-1, -1), True),  # 自動換行
+    ]))
+    elements.append(table)
+
+    doc.build(elements)
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=my_moods.pdf"}
+    )
