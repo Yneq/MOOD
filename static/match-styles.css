@@ -526,6 +526,7 @@ a {
   
 #q-login, #q-signup {
     text-decoration: underline;
+    cursor: pointer;
 }
   
 .fail-email-password, .fail-email-registed, .fail-registed {

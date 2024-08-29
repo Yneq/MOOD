@@ -369,6 +369,7 @@ footer {
 
 #q-login, #q-signup {
   text-decoration: underline;
+  cursor: pointer;
 }
 
 .question a {

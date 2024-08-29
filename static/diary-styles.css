@@ -143,9 +143,9 @@ margin-left: 10px;
     text-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
 }
 
-.title-publicexchange {
+.title-downloadMyMoods {
     color: rgba(68, 136, 153, 1);
-    font-size: 20px;
+    font-size: 22px;
     font-weight: bold;
     cursor: pointer;
     display: flex;
@@ -153,6 +153,8 @@ margin-left: 10px;
     left: 50%;
     white-space: nowrap; /* 防止文字換行 */
     margin-bottom: 20px;
+    margin-top: 50px;
+
 }
 
 .title-publicexchange:hover {
@@ -453,6 +455,7 @@ a {
   
 #q-login, #q-signup {
     text-decoration: underline;
+    cursor: pointer;
 }
   
 .fail-email-password, .fail-email-registed, .fail-registed {
