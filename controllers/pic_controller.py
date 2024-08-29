@@ -146,23 +146,26 @@ async def delete_message(message_id: int, current_user: Dict = Depends(get_curre
 
 
 @router.get('/get_messages')
-async def get_messages(current_user: Dict = Depends(get_current_user)):
+async def get_messages(current_user_id: int = None):
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
         
         # 查詢 messages
         messages_query = """
-        SELECT m.id, m.text, m.imageUrl, m.created_at, m.email, 
-               u.name as user_name,
-               (SELECT COUNT(*) FROM likes WHERE message_id = m.id) as like_count,
-               EXISTS(SELECT 1 FROM likes WHERE message_id = m.id AND user_id = %s) as is_liked_by_user
+        SELECT m.id, m.text, m.imageUrl, m.created_at, m.email,
+            u.name as user_name,
+            (SELECT COUNT(*) FROM likes WHERE message_id = m.id) as like_count,
+            CASE 
+            WHEN %s IS NOT NULL THEN EXISTS(SELECT 1 FROM likes WHERE message_id = m.id AND user_id = %s)
+            ELSE FALSE
+            END as is_liked_by_user
         FROM messages m
         LEFT JOIN users u ON m.email = u.email
         ORDER BY m.created_at DESC
         """
 
-        cursor.execute(messages_query, (current_user['id'],))
+        cursor.execute(messages_query, (current_user_id, current_user_id))
         messages = cursor.fetchall()
 
         # 格式化消息

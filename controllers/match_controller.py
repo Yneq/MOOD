@@ -12,13 +12,16 @@ import logging
 import traceback
 from contextlib import closing
 from mysql.connector import pooling, Error
-
-
+import redis.asyncio as redis
+import json
 
 
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+
 
 
 class User:
@@ -281,6 +284,10 @@ async def respond_to_matching_request(
         db.commit()
         logger.debug("任務提交成功")
 
+        # 清除相關的快取
+        await redis_client.delete(f"match_status:{current_user['id']}")
+        await redis_client.delete(f"match_status:{requester_id}")
+        
         return {"message": f"Scucessfully {response.action}ed the match request"}
 
     except mysql.connector.Error as e:
@@ -292,9 +299,7 @@ async def respond_to_matching_request(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"處理請求時發生未知錯誤: {str(e)}")
     finally:
-        if not db.is_closed():
-            db.close()
-        logger.debug("數據庫連接關閉")
+        logger.debug("數據庫操作完成")
 
 
 @router.post("/matching/request_exchange")
@@ -315,8 +320,11 @@ async def request_exchange(
         if result:
             partner_id = result['partner_id']
             cursor.execute("UPDATE users SET is_matching = 0 WHERE id IN (%s, %s)", (current_user['id'], partner_id))
+                        # 清除匹配夥伴的快取
+            await redis_client.delete(f"match_status:{partner_id}")
         else:
             cursor.execute("UPDATE users SET is_matching = 0 WHERE id = %s", (current_user['id'],))
+                        # 清除匹配夥伴的快取
 
         # 檢查用戶在過去 3 天內的配對次數
         cursor.execute("""
@@ -365,6 +373,11 @@ async def request_exchange(
         )
 
         db.commit()
+
+        # 清除相關的快取
+        await redis_client.delete(f"match_status:{current_user['id']}")
+        await redis_client.delete(f"match_status:{partner['id']}")
+
         return {"message": "Your match request is on its way!", "status": "success", "partner_id": partner['id']}
         
     except mysql.connector.Error as e:
@@ -384,6 +397,15 @@ async def get_matching_status(
     current_user: dict = Depends(get_current_user),
     db: mysql.connector.connection.MySQLConnection = Depends(get_db)
 ):
+    cache_key = f"match_status:{current_user['id']}"
+
+    cached_status = await redis_client.get(cache_key)
+    if cached_status:
+        print(f"Cache hit: {cache_key}")  # 調試信息
+        return json.loads(cached_status)
+
+    print(f"Cache miss: {cache_key}")  # 調試信息
+
     cursor = db.cursor(dictionary=True)
     
     try:
@@ -425,15 +447,18 @@ async def get_matching_status(
                     # cursor.execute("UPDATE users SET is_matching = 1 WHERE id IN (%s, %s)", (current_user['id'], user_info['partner_id']))
                     # db.commit()
                     # 匹配有效
-                    return {
+                    status = {
                         "status": "accepted",
                         "partner_id": user_info['partner_id'],
                         "partner_name": user_info['partner_name'],
                         "match_date": user_info['created_at'].isoformat() if user_info['created_at'] else None
                     }
+                    await redis_client.set(cache_key, json.dumps(status), ex=3600)
+                    return status
                 # 如果 is_matching 不為 1 或匹配狀態不為 'accepted'
             cursor.execute("UPDATE users SET is_matching = 0 WHERE id = %s", (current_user['id'],))
             db.commit()
+            await redis_client.set(cache_key, json.dumps(status), ex=3600)  # 1小時過期
             return {"status": "match_expired", "message": "Your previous match has expired. Click EXCHANGE to find a new diary buddy!"}
         else:
             # 沒有匹配記錄
@@ -475,8 +500,10 @@ async def get_matching_status(
                     }
                 else:
                     print(f"Error: requester_id not found in pending_request: {pending_request}")
+                    await redis_client.set(cache_key, json.dumps(status), ex=600)  # 10分鐘過期
                     return {"status": "error", "message": "Invalid request data"}
 
+        await redis_client.set(cache_key, json.dumps(status), ex=3600)  # 1小時過期
         return {"status": "no_match", "message": "NO partner matched yet. Click EXCHANGE to find a diary buddy!"}
     except Exception as e:
         print(f"Error in get_matching_status: {str(e)}")
@@ -495,6 +522,15 @@ async def get_partner_diary(
     current_user: dict = Depends(get_current_user),
     db: mysql.connector.connection.MySQLConnection = Depends(get_db)
 ):
+
+    cache_key = f"partner_diary:{partner_id}"
+    cached_diary = await redis_client.get(cache_key)
+    if cached_diary:
+        print(f"Cache hit: {cache_key}")  # 調試信息
+        return json.loads(cached_diary)
+
+    print(f"Cache miss: {cache_key}")  # 調試信息
+
     try:
         logger.debug(f"Attempting to get partner diary for partner_id: {partner_id}, current_user: {current_user['id']}")
 
@@ -539,7 +575,13 @@ async def get_partner_diary(
             entry['created_at'] = entry['created_at'].isoformat()
             entry['updated_at'] = entry['updated_at'].isoformat()
             # is_public 會由 Pydantic 驗證器自動處理
-        return [DiaryEntryResponse(**entry) for entry in entries]
+
+        entries = [DiaryEntryResponse(**entry) for entry in entries]
+
+        # 將結果存入快取
+        await redis_client.set(cache_key, json.dumps([entry.dict() for entry in entries]), ex=3600)  # 設置1小時過期
+
+        return entries
 
     except HTTPException as http_ex:
         raise http_ex

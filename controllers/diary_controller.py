@@ -14,7 +14,12 @@ from typing import List, Dict, Union
 from models.diary import PresigneUrlRequest, DiaryEntryResponse, DiaryEntryRequest, MoodEntryRequest, MoodEntryResponse, MoodData, ProfileUpdateRequest
 from dependencies import get_db, get_current_user
 import pytz
+import redis.asyncio as redis
+import json
 
+
+
+redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
 # 設置日誌記錄
 import logging
@@ -55,19 +60,40 @@ async def get_diary_entries(
     current_user: Dict = Depends(get_current_user),
     db: mysql.connector.connection.MySQLConnection = Depends(get_db)
 ):
+
+    cache_key = f"diary_entries:{current_user['id']}"
     cursor = None
     try:
+        # 首先檢查是否有新的日記條目
         cursor = db.cursor(dictionary=True)
-        query = "SELECT * FROM diary_entries WHERE user_id = %s ORDER BY date DESC LIMIT %s OFFSET %s"
-        cursor.execute(query, (current_user["id"], limit, skip))
-        entries = cursor.fetchall()
-        
-        for entry in entries:
-            entry['date'] = entry['date'].isoformat() 
-            entry['created_at'] = datetime.now().isoformat()
-            entry['updated_at'] = datetime.now().isoformat()
-        
-        return [DiaryEntryResponse(**entry) for entry in entries]
+        check_query = "SELECT MAX(updated_at) as last_update FROM diary_entries WHERE user_id = %s"
+        cursor.execute(check_query, (current_user["id"],))
+        last_update = cursor.fetchone()['last_update']
+
+        cached_last_update = await redis_client.get(f"{cache_key}:last_update")
+
+        # 如果沒有緩存或者有新的更新，則查詢數據庫
+        if not cached_last_update or (last_update and str(last_update) > cached_last_update):
+            query = "SELECT * FROM diary_entries WHERE user_id = %s ORDER BY date DESC LIMIT %s OFFSET %s"
+            cursor.execute(query, (current_user["id"], limit, skip))
+            entries = cursor.fetchall()
+
+            for entry in entries:
+                entry['date'] = entry['date'].isoformat() 
+                entry['created_at'] = datetime.now().isoformat()
+                entry['updated_at'] = datetime.now().isoformat()
+            
+            entries_response = [DiaryEntryResponse(**entry) for entry in entries]
+
+            await redis_client.set(cache_key, json.dumps([entry.dict() for entry in entries_response]), ex=300)  # 設置5分鐘過期
+            if last_update:
+                await redis_client.set(f"{cache_key}:last_update", str(last_update), ex=300)
+                
+            return entries_response
+        else:
+            # 如果沒有新的更新，使用緩存的數據
+            cached_entries = await redis_client.get(cache_key)
+            return json.loads(cached_entries)
     except mysql.connector.Error as e:
         logger.error(f"Database error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"資料庫錯誤: {str(e)}")
@@ -85,6 +111,16 @@ async def get_diary_entry(
     current_user: Dict = Depends(get_current_user),
     db: mysql.connector.connection.MySQLConnection = Depends(get_db)
 ):
+    try:
+        entry_id = int(param)
+        cache_key = f"diary_entry:{current_user['id']}:{entry_id}"
+    except ValueError:
+        cache_key = f"diary_entries_date:{current_user['id']}:{param}"
+
+    cached_entry = await redis_client.get(cache_key)
+    if cached_entry:
+        return json.loads(cached_entry)
+
     cursor = None
     try:
         cursor = db.cursor(dictionary=True)
@@ -131,9 +167,13 @@ async def get_diary_entry(
             weather = entry.pop('weather')
             entry['mood_data'] = MoodData(mood_score=mood_score, weather=weather) if mood_score is not None or weather is not None else None
 
+            response = DiaryEntryResponse(**entry)
+            if isinstance(response, list):
+                await redis_client.set(cache_key, json.dumps([entry.dict() for entry in response]), ex=3600)
+            else:
+                await redis_client.set(cache_key, json.dumps(response.dict()), ex=3600)
             logger.debug(f"Processed entry: {entry}")
-
-            return DiaryEntryResponse(**entry)
+            return response
         
         except ValueError:
             # 如果不是 ID，則按原來的方式處理日期查詢
@@ -165,7 +205,6 @@ async def get_diary_entry(
             ORDER BY 
                 diary_entries.date DESC
             """
-            logger.debug(f"Executing query: {query}")
             logger.debug(f"Parameters: {current_user['id']}, {query_date}")
             
             cursor.execute(query, (current_user["id"], query_date))
@@ -221,16 +260,6 @@ async def create_diary_entry(
             else:
                 entry_date = entry.date
         
-        # # 如果沒有提供日期，使用當前的台北時間
-        # if entry.date is None:
-        #     entry_date = datetime.now(taipei_tz).date()
-        # else:
-        #     # 如果提供的是 datetime 或 date，都統一轉換為 date
-        #     if isinstance(entry.date, datetime):
-        #         entry_date = entry.date.astimezone(taipei_tz).date()
-        #     else:
-        #         entry_date = entry.date
-        
         # 將當前時間轉換為 UTC
         now_iso = datetime.now().isoformat()
 
@@ -259,6 +288,10 @@ async def create_diary_entry(
             
             response = DiaryEntryResponse(**new_entry)
             logger.debug(f"Created DiaryEntryResponse: {response}")
+
+            # 清除日記列表的快取
+            await redis_client.delete(f"diary_entries:{current_user['id']}:*")
+
             return response
         else:
             raise HTTPException(status_code=404, detail="新創建的條目無法找到")
@@ -291,17 +324,6 @@ async def update_diary_entry(
         existing_entry = cursor.fetchone()
         if not existing_entry:
             raise HTTPException(status_code=404, detail="日記條目未找到或不屬於當前用戶")
-
-        # # 處理日期
-        # if entry.date is None:
-        #     entry_date = datetime.now(taipei_tz).date()
-        # else:
-        #     if isinstance(entry.date, datetime):
-        #         entry_date = entry.date.astimezone(taipei_tz).date()
-        #     elif isinstance(entry.date, str):
-        #         entry_date = datetime.strptime(entry.date, "%Y-%m-%d").date()
-        #     else:
-        #         entry_date = entry.date
 
         if entry.date is None:
             entry_date = datetime.now().date()
@@ -344,6 +366,10 @@ async def update_diary_entry(
 
             response = DiaryEntryResponse(**updated_entry)
             logger.debug(f"Updated DiaryEntryResponse: {response}")
+
+            # 清除相關快取
+            await redis_client.delete(f"diary_entries:{current_user['id']}:*")
+            await redis_client.delete(f"diary_entry:{current_user['id']}:{entry_id}")
             return response
         else:
             raise HTTPException(status_code=404, detail="更新後的條目無法找到")
@@ -366,19 +392,39 @@ async def delete_diary_entry(
 ):
     cursor = None
     try:
-        cursor = db.cursor()
+        cursor = db.cursor(dictionary=True)
+        
+        # 首先獲取要刪除的日記條目信息
         check_query = "SELECT * FROM diary_entries WHERE id = %s AND user_id = %s"
         cursor.execute(check_query, (entry_id, current_user["id"]))
-        if not cursor.fetchone():
+        entry_to_delete = cursor.fetchone()
+        
+        if not entry_to_delete:
             raise HTTPException(status_code=404, detail="日記條目未找到或不屬於當前用戶")
 
+        # 執行刪除操作
         delete_query = "DELETE FROM diary_entries WHERE id = %s AND user_id = %s"
         cursor.execute(delete_query, (entry_id, current_user["id"]))
         db.commit()
 
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="未找到要刪除的日記條目")
-        return {"message": "日記條目已成功刪除"}
+        
+        # 清除所有相關的緩存
+        cache_keys_to_delete = [
+            f"diary_entries:{current_user['id']}*",
+            f"diary_entry:{current_user['id']}:{entry_id}",
+            f"diary_entries_date:{current_user['id']}:*"
+        ]
+
+        for key_pattern in cache_keys_to_delete:
+            matching_keys = await redis_client.keys(key_pattern)
+            if matching_keys:
+                await redis_client.delete(*matching_keys)
+
+        logger.info(f"Deleted diary entry {entry_id} and cleared related caches for user {current_user['id']}")
+        return {"message": "日記條目已成功刪除，相關緩存已清理"}
+        
     except mysql.connector.Error as e:
         logger.error(f"Database error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"資料庫錯誤: {str(e)}")
@@ -446,6 +492,10 @@ async def save_mood_entry(
         saved_entry = cursor.fetchone()
 
         if saved_entry:
+            # 清除相關的快取
+            await redis_client.delete(f"diary_entries:{current_user['id']}:*")
+            await redis_client.delete(f"diary_entries_date:{current_user['id']}:{mood_entry.date}")
+            await redis_client.delete(f"diary_entry:{current_user['id']}:*")  # 可能需要刪除所有相關的單個條目快取
             return MoodEntryResponse(**saved_entry)
         else:
             raise HTTPException(status_code=404, detail="無法檢索保存的心情記錄")
@@ -495,6 +545,8 @@ async def update_profile(
             update_values.append(request.new_password)
 
             if request.avatar_url:
+                # 如果更新了頭像，清除頭像快取
+                await redis_client.delete(f"user_avatar:{current_user['id']}")
                 update_fields.append("avatar_url = %s")
                 update_values.append(request.avatar_url)
         
@@ -507,7 +559,8 @@ async def update_profile(
 
             cursor.execute("SELECT avatar_url FROM users WHERE id = %s", (current_user['id'],))
             updated_user = cursor.fetchone()
-            
+
+            await redis_client.set(f"user_avatar:{current_user['id']}", json.dumps({"avatar_url": request.avatar_url}), ex=3600)
             logger.info(f"User {current_user['id']} updated profile successfully")
             return JSONResponse(content={
                 'success': True, 
@@ -536,6 +589,12 @@ async def get_user_avatar(
     current_user: dict = Depends(get_current_user),
     db: mysql.connector.connection.MySQLConnection = Depends(get_db)
 ):
+
+    cache_key = f"user_avatar:{user_id}"
+    cached_avatar = await redis_client.get(cache_key)
+    if cached_avatar:
+        return json.loads(cached_avatar)
+
     try:
         cursor = db.cursor(dictionary=True)
         query = "SELECT avatar_url FROM users WHERE id = %s"
@@ -546,6 +605,7 @@ async def get_user_avatar(
         if not result:
             raise HTTPException(status_code=404, detail="User not found")
 
+        await redis_client.set(cache_key, json.dumps(result), ex=3600)  # 快取1小時
         logging.info(f"Query result: {result}")
         return result
     except mysql.connector.Error as e:

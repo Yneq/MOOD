@@ -97,11 +97,12 @@ async function checkMatchStatus() {
                 if (partnerNameElement) {
                     const partnerAvatarUrl = await loadUserAvatar(data.partner_id);
 
-                    if (partnerAvatarUrl) {
-                        partnerNameElement.style.backgroundImage = `url('${partnerAvatarUrl}')`;
-                        partnerNameElement.textContent = '';
+                    partnerNameElement.style.backgroundImage = partnerAvatarUrl ? `url('${partnerAvatarUrl}')` : '';
+                    partnerNameElement.textContent = partnerAvatarUrl ? '' : data.partner_name.charAt(0).toUpperCase();
+                    partnerNameElement.style.display = 'flex';
 
-                        const tooltip = document.getElementById('partnerNameTooltip');
+                    const tooltip = document.getElementById('partnerNameTooltip');
+                    if (tooltip) {
                         tooltip.textContent = data.partner_name;
                         partnerNameElement.onmouseover = function() {
                             tooltip.style.visibility = 'visible';
@@ -112,12 +113,14 @@ async function checkMatchStatus() {
                             tooltip.style.opacity = '0';
                         };
                     } else {
-                        partnerNameElement.style.backgroundImage = '';
-                        partnerNameElement.textContent = data.partner_name.charAt(0).toUpperCase();
+                        console.error('Partner name tooltip element not found');
                     }
-                    partnerNameElement.style.display = 'flex';
                 }
-                await loadPartnerDiary(data.partner_id);
+                // 檢查合作夥伴的日記內容
+                const partnerDiary = await loadPartnerDiary(data.partner_id);
+                if (partnerDiaryContent) {
+                    partnerDiaryContent.innerHTML = partnerDiary || '<p>Your partner hasn\'t written any diary entries yet. Check back later!</p>';
+                    }
                 break;
             case 'pending':
             console.log(`Match accepted with partner Name: ${data.partner_name}`);
@@ -174,7 +177,9 @@ async function loadPartnerDiary(partnerId) {
         if (response.status === 403) {
             // 匹配已經結束，更新 UI
             showNotification("You are no longer matched with this user");
-            return;
+            currentPartnerId = null;
+            checkMatchStatus();
+            return null; // 返回 null 表示沒有有效的日記內容
         }
 
         console.log('Response status:', response.status);
@@ -183,53 +188,45 @@ async function loadPartnerDiary(partnerId) {
         const responseText = await response.text();
         console.log('Response text:', responseText);
 
-        let errorData;
+        let data;
         try {
-            errorData = JSON.parse(responseText);
+            data = JSON.parse(responseText);
         } catch (e) {
             console.error('Error parsing JSON:', e);
-            errorData = { detail: 'Unable to parse error response' };
+            throw new Error('Unable to parse server response');
         }
 
         if (!response.ok) {
             console.error('Server error response:', errorData);
-            
-            if (response.status === 403) {
-                showNotification(errorData.detail || "You are no longer matched with this user");
-                currentPartnerId = null;
-                checkMatchStatus();
-                return; // 提前返回，不要繼續處理
-            } else {
-                throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-            }
+            throw new Error(data.detail || `HTTP error! status: ${response.status}`);            
         }    
 
-        const data = errorData; // 因為我們已經解析了 JSON
         console.log('Partner diary data:', data);
 
 
-        partnerDiaryContent.innerHTML = ''; // 清空現有內容
-
-        if (data.length > 0) {
-            data.forEach(entry => {
-                const entryElement = document.createElement('div');
-                entryElement.classList.add('partnerdiary-entry');
-                entryElement.innerHTML = `
+        // partnerDiaryContent.innerHTML = ''; // 清空現有內容
+        let diaryContent = '';
+        if (Array.isArray(data) && data.length > 0) {
+            diaryContent = data.map(entry => `
                 <div class="partnerdiary-entry">
                     <div class="moodsDate">${entry.date}</div>
                     <div class="partnerdiary-content">
                         <p>${entry.content}</p>
                     </div>
                 </div>
-                `;
-                partnerDiaryContent.appendChild(entryElement);
-            });
+            `).join('');
             console.log(`Rendered ${data.length} diary entries`);
 
         } else {
-            partnerDiaryContent.innerHTML = '<p>Your partner has not written any diaries yet.</p>';
+            partnerDiaryContent.innerHTML = '<p>Your partner has not written any diaries yet. Check back later!</p>';
             console.log('No diary entries found for partner');
         }
+
+        if (partnerDiaryContent) {
+            partnerDiaryContent.innerHTML = diaryContent;
+        }
+
+        return diaryContent; // 返回日記內容，即使是空的
     } catch (error) {
         console.error('Error loading partner diary:', error);
         console.error('Error stack:', error.stack);
@@ -514,25 +511,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
         // 處理 "START MY MOODs" 按鈕點擊事件
-    const startMyMoodsBtn = document.getElementById('startMyMoodsBtn');
-    if (startMyMoodsBtn) {
-        startMyMoodsBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            if (isLoggedIn) {
-                window.location.href = '/static/diary.html'; // 已登入，跳轉到 diary.html
-            } else {
-                showLoginModal(); // 未登入，顯示登入框
-            }
+    const startMyMoodsBtns = document.querySelectorAll('.start-my-moods-btn');
+    if (startMyMoodsBtns.length > 0) {
+        startMyMoodsBtns.forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (isLoggedIn) {
+                    window.location.href = '/static/diary.html'; // 已登入，跳轉到 diary.html
+                } else {
+                    showLoginModal(); // 未登入，顯示登入框
+                }
+            });
         });
     }
 
-    // 處理 "START PUBLIC MOODs" 按鈕點擊事件
-    const startPublicMoodsBtn = document.getElementById('startPublicMoodsBtn');
-    if (startPublicMoodsBtn) {
-        startPublicMoodsBtn.addEventListener('click', function(e) {
+    // // 處理 "START PUBLIC MOODs" 按鈕點擊事件
+    // const startPublicMoodsBtn = document.getElementById('startPublicMoodsBtn');
+    // if (startPublicMoodsBtn) {
+    //     startPublicMoodsBtn.addEventListener('click', function(e) {
+    //         e.preventDefault();
+    //         if (isLoggedIn) {
+    //             window.location.href = '/static/board.html'; // 已登入，跳轉到 board.html
+    //         } else {
+    //             showLoginModal(); // 未登入，顯示登入框
+    //         }
+    //     });
+    // }
+
+    // 處理 "MOODs EXCANGE" 按鈕點擊事件
+    const moodsExchangeBtn = document.getElementById('moodsExchangeBtn');
+    if (moodsExchangeBtn) {
+        moodsExchangeBtn.addEventListener('click', function(e) {
             e.preventDefault();
             if (isLoggedIn) {
-                window.location.href = '/static/board.html'; // 已登入，跳轉到 board.html
+                window.location.href = '/static/match.html'; // 已登入，跳轉到 diary.html
             } else {
                 showLoginModal(); // 未登入，顯示登入框
             }
@@ -1542,7 +1554,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     userAvatar.textContent = currentUserName.charAt(0).toUpperCase();
 
                 } else {
-                    // 如果連用戶名也沒有，可以設置一個默認圖片
+                    // 如果連用戶名也沒有，設置一個默認圖片
                     userAvatar.style.backgroundImage = '';
                     avatarPreview.style.backgroundImage = '';
                 }
@@ -1716,6 +1728,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const userAvatar = document.getElementById('userAvatar');
                     const avatarPreview = document.getElementById('avatar-preview');
                     if (userAvatar) {
+                        userAvatar.style.backgroundImage = '';
                         userAvatar.style.backgroundImage = `url('${result.avatar_url}')`;
                         avatarPreview.style.backgroundImage = `url('${result.avatar_url}')`;
                         

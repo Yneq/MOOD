@@ -6,6 +6,8 @@ from views import static_pages
 from controllers import user_controller, diary_controller, pic_controller, match_controller
 import logging
 import traceback
+import threading
+import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,7 +31,21 @@ app.include_router(diary_controller.router)
 app.include_router(pic_controller.router)
 app.include_router(match_controller.router)
 
+
 # print(f"Current root_path: {root_path}")
+
+
+# 清理連接的線程
+# def cleanup_connections():
+#     while True:
+#         time.sleep(300)  # 每 5 分鐘檢查一次
+#         try:
+#             pool._remove_connections()
+#             logger.info("已執行連接池清理")
+#         except Exception as e:
+#             logger.error(f"清理連接時發生錯誤: {str(e)}")
+
+# threading.Thread(target=cleanup_connections, daemon=True).start()
 
 # 全局異常處理器
 @app.exception_handler(Exception)

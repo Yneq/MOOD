@@ -1,33 +1,36 @@
 
-// 立即執行的登錄檢查
-(function() {
-    const isLoggedIn = !!localStorage.getItem('token');
-    const isBoardPage = window.location.pathname.includes('board.html');
+// // 立即執行的登錄檢查
+// (function() {
+//     const isLoggedIn = !!localStorage.getItem('token');
+//     const isBoardPage = window.location.pathname.includes('board.html');
     
-    if (isBoardPage && !isLoggedIn) {
-        window.location.href = '/static/index.html';
-    }
-})();
+//     if (isBoardPage && !isLoggedIn) {
+//         window.location.href = '/static/index.html';
+//     }
+// })();
 
 let messages = [];
 let currentUserName = localStorage.getItem('user_name') || 'Anonymous';
 
-async function loadMessages() {
+async function loadMessages(userId = null) {
     try {
-        const token = localStorage.getItem('token');
         const headers = {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
         };
 
-        const response = await fetch('/get_messages', { headers });
+        let url = '/get_messages';
+        if (userId !== null) {
+            url += `?current_user_id=${userId}`;
+        }
+
+        const response = await fetch(url, { headers });
 
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         messages = await response.json();
-        console.log("Received messages:", messages);  // 添加這行來查看接收到的數據
+        console.log("Received messages:", messages);  // 測試查看接收到的數據
 
         renderMessages();
     } catch (error) {
@@ -161,6 +164,10 @@ function renderMessages() {
 async function toggleLike(messageId) {
     try {
         const token = localStorage.getItem('token');
+        if (!token){
+            showLoginModal();
+            return
+        }
         const response = await fetch(`/toggle_like/${messageId}`, {
             method: 'POST',
             headers: {
@@ -206,6 +213,10 @@ async function toggleLike(messageId) {
         showMessage(data.liked ? 'Like' : 'Dislike', 'success');
     } catch (error) {
         console.error('切換按讚狀態時發生錯誤:', error);
+        if (!token) {
+            showMessage('Please sign in first', 'error');
+            return
+        }
         showMessage('Renew Like failed', 'error');
     }
 }
@@ -219,7 +230,7 @@ function getUserDisplayName(message) {
 }
 
 // 頁面加載時調用
-document.addEventListener('DOMContentLoaded', loadMessages);
+document.addEventListener('DOMContentLoaded', () => loadMessages());
 
 let lastSubmitTime = 0;
 const SUBMIT_COOLDOWN = 5000; // 5 seconds
@@ -283,8 +294,9 @@ document.getElementById('postForm').addEventListener('submit', async function(e)
         const token = localStorage.getItem('token');
 
         if (!token) {
-            showMessage('Please sign in first', 'error');
-            return;
+            showMessage('Please Sign-in first', 'error')
+            submitButton.disabled = false;  // 重要：如果未登錄，立即重新啟用按鈕
+            return
         }
 
         const response = await fetch('/save_message', {
@@ -317,10 +329,12 @@ document.getElementById('postForm').addEventListener('submit', async function(e)
         setTimeout(() => {
             submitButton.disabled = false;
         }, SUBMIT_COOLDOWN);
-
+        showMessage('Share MOODs Successfully!', 'success')
     } catch (error) {
         console.error('Error saving message:', error);
-        alert('Error saving message');
+        showMessage('An error occurred. Please try again.', 'error');
+    } finally {
+        // 確保在所有情況下都重新啟用按鈕
         submitButton.disabled = false;
     }
 });
@@ -352,7 +366,7 @@ async function deleteMessage(messageId) {
         if (error.message.includes("You don't have permission")) {
             showMessage('You don\'t have permission to delete this message', 'error');
         } else if (error.message.includes("Message not found")) {
-            showMessage('Message not found or already deleted', 'info');
+            showMessage('Message not found or already deleted', 'error');
             // 從本地數組中移除留言並重新渲染，以防萬一
             messages = messages.filter(message => message.id !== messageId);
             renderMessages();
@@ -366,6 +380,14 @@ document.getElementById('imageInput').addEventListener('change', function() {
     var fileName = this.files[0] ? this.files[0].name : 'No file chosen';
     document.getElementById('fileNameDisplay').textContent = fileName;
 });
+
+function showLoginModal() {
+    modal_login.style.display = "block";
+    overlay.style.display = "block";
+}
+
+const modal_login = document.getElementById('modal-login');
+const overlay = document.querySelector('.overlay');
 
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -384,14 +406,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    const moodsExchangeBtn = document.getElementById('moodsExchangeBtn');
+    if (moodsExchangeBtn) {
+        moodsExchangeBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (isLoggedIn) {
+                window.location.href = '/static/match.html'; // 已登入，跳轉到 diary.html
+            } else {
+                showLoginModal(); // 未登入，顯示登入框
+            }
+        });
+    }
+
+    // const shareDiaryBtn = document.getElementById('shareDiaryBtn');
+    // if (shareDiaryBtn) {
+    //     shareDiaryBtn.addEventListener('click', function(e) {
+    //         e.preventDefault();
+    //         if (!isLoggedIn) {
+    //             showLoginModal(); // 未登入，顯示登入框
+    //             return
+    //         }
+    //     });
+    // }
+
     // 用戶認證相關變量
-    const modal_login = document.getElementById('modal-login');
     const modal_signup = document.getElementById('modal-signup');
     const loginBtn = document.getElementById('loginBtn');
     const closeBtn = document.querySelectorAll('.close-btn');
     const q_loginBtn = document.getElementById('q-login');
     const q_signupBtn = document.getElementById('q-signup');
-    const overlay = document.querySelector('.overlay');
     const loginRegisterBtn = document.getElementById('login-register-btn');
     const signupRegisterBtn = document.getElementById('signup-register-btn');
     const userAvatar = document.getElementById('userAvatar');
@@ -445,17 +488,14 @@ function logout() {
     if (userAvatar) {
         userAvatar.style.display = 'none';
         overlay.style.display = 'none';
-    }
+        }
     console.log('Sign out');
-    if (isBoardPage) {
-        window.location.href = '/static/index.html';
-    }
+    // if (isBoardPage) {
+    //     window.location.href = '/static/index.html';
+    //     }
     }
 
-function showLoginModal() {
-    modal_login.style.display = "block";
-    overlay.style.display = "block";
-}
+
 
 closeBtn.forEach(btn => {
     btn.onclick = closeModals;
@@ -551,9 +591,11 @@ function handleLogin() {
         .then(response => response.json())
         .then(data => {
             if (data.error) {
-                showMessage(data.message || 'Login failed, please try again later', 'error');
+                showMessage(data.message, 'error' || 'Login failed, please try again later', 'error');
             } else if (data.token) {
+                //加入user_name, email
                 localStorage.setItem('token', data.token);
+                isLoggedIn = true;  // 立即更新登錄狀態
                 // 解析 token 並保存用戶信息
                 const tokenPayload = parseJwt(data.token);
                 if (tokenPayload) {
@@ -562,22 +604,20 @@ function handleLogin() {
                     }
                     if (tokenPayload.email) {
                         localStorage.setItem('email', tokenPayload.email);
+                       }
                     }
+                    if (tokenPayload.id) {
+                        localStorage.setItem('user_id', tokenPayload.id);
                     }
-                    console.log('Stored user info:', {
-                        token: data.token,
-                        user_name: localStorage.getItem('user_name'),
-                        email: localStorage.getItem('email')
-                    });
-            
-        
+
+                updateUserDisplay();
                 showMessage('Sign in successfully', 'success');
                 setTimeout(() => {
                     closeModals();
-                    isLoggedIn = true;
-                    updateUserDisplay();
-                    if (isDiaryPage) {
-                        window.location.reload();
+                    
+                     // 如果在 match 頁面,建立 WebSocket 連接
+                    if (window.location.pathname.includes('match.html')) {
+                        connectWebSocket();
                     }
                 }, 2000);
             } else {
@@ -673,7 +713,7 @@ async function loadUserAvatar(targetUserId = null) {
         const currentUserId = localStorage.getItem('user_id');
 
         if (!token || !currentUserId) {
-            console.error('No token or user ID found');
+            // console.error('No token or user ID found');
             return;
         }
 
@@ -782,7 +822,7 @@ if (profileForm) {
         formData.delete('new-password');
         formData.delete('confirm-password');
     } else if (newPassword !== confirmPassword) {
-        showMessage(document.querySelector('.fail-self-info'), 'New passwords do not match');
+        showMessage( 'New passwords do not match', 'error');
         return;
     }
     
@@ -812,7 +852,7 @@ if (profileForm) {
             avatarUrl = cloudfront_url;
         } catch (error) {
             console.error('Error uploading avatar:', error);
-            showMessage(document.querySelector('.fail-self-info'), 'Upload avatar failed');
+            showMessage('Upload avatar failed', 'error');
             submitButton.disabled = false;
             return;
         }
@@ -822,7 +862,7 @@ if (profileForm) {
         const token = localStorage.getItem('token');
 
         if (!token) {
-            showMessage(document.querySelector('.fail-self-info'), 'Please signin first');
+            showMessage('Please sign-in first', 'error');
             return;
         }
 
@@ -848,7 +888,7 @@ if (profileForm) {
         if (result.success) {
             console.log('Update successful, received result:', result);
 
-            showMessage(document.querySelector('.success-self-info'), 'Update profile successfully');
+            showMessage('Update profile successfully', 'success');
             if (result.avatar_url) {
                 console.log('Attempting to update avatar with URL:', result.avatar_url);
                 const userAvatar = document.getElementById('userAvatar');
@@ -865,12 +905,12 @@ if (profileForm) {
             }
         } else {
             console.error('Update failed:', result.message);
-            showMessage(document.querySelector('.fail-self-info'), result.message || 'Update profile failed');
+            showMessage(result.message, 'error' || 'Update profile failed', 'error');
         }
 
     } catch (error) {
         console.error('Error updating profile:', error);
-        showMessage(document.querySelector('.fail-self-info'), 'Update profile failed');
+        showMessage('Update profile failed', 'error');
     } finally {
         submitButton.disabled = false;
     }
@@ -941,7 +981,7 @@ function handleLogout() {
     }
     // 如果在需要登錄的頁面上登出，重定向到首頁
     const currentPage = window.location.pathname;
-    if (currentPage.includes('diary.html') || currentPage.includes('match.html')) {
+    if (currentPage.includes('diary.html')) {
         window.location.href = '/static/index.html';
     }
 }

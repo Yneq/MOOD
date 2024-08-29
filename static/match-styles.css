@@ -9,6 +9,8 @@ body {
     padding: 0;
     box-sizing: border-box;
     color: #fff;
+    background-image: url(universe1.jpg);
+    background-attachment: fixed;
 }
 
 .navbar {
@@ -134,8 +136,6 @@ margin-left: 10px;
     justify-content: center;
     align-items: center;
     position: absolute;
-    left: 50%;
-    top: 50%; 
     transform: translate(-50%, -50%); /* 修改：同時在 X 和 Y 軸上移動 */
     white-space: nowrap; /* 防止文字換行 */
     height: 100%;
@@ -264,7 +264,7 @@ margin-left: 10px;
 }
 
 .diary-entry, .selected-diary {
-    background: rgba(128, 128, 128, 0.3);
+    background: rgb(8 42 47 / 80%);
     backdrop-filter: blur(45px);
     border-radius: 15px;
     padding: 20px;
@@ -586,7 +586,7 @@ a {
 .recent-diary-entry {
     margin-bottom: 15px;
     padding: 10px;
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: rgb(29 46 71 / 80%);
     border-radius: 15px;
     cursor: pointer;
     transition: all 0.3s ease;
