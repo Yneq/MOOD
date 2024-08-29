@@ -25,6 +25,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
 
 
 
@@ -714,10 +716,12 @@ async def create_pdf_response(entries):
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
 
-    pdfmetrics.registerFont(TTFont('NotoSansCJK', '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'))
+    # 註冊 CID 字體
+    pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
 
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name='Chinese', fontName='NotoSansCJK', fontSize=12))
+    # 修改 Chinese 樣式使用 CID 字體
+    styles.add(ParagraphStyle(name='Chinese', fontName='STSong-Light', fontSize=12))
 
     title = Paragraph("My Mood Diary", styles['Title'])
     elements.append(title)
@@ -743,7 +747,7 @@ async def create_pdf_response(entries):
         ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
         ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 1), (-1, -1), 'NotoSansCJK'),  # 使用支持中文的字體
+        ('FONTNAME', (0, 1), (-1, -1), 'STSong-Light'),  # 使用 CID 字體
         ('FONTSIZE', (0, 1), (-1, -1), 12),
         ('TOPPADDING', (0, 1), (-1, -1), 6),
         ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
