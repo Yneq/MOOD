@@ -130,6 +130,49 @@ body {
   cursor: pointer;
 }
 
+.mood-icon {
+  width: 36px;
+  height: 24px;
+  background-image: url('mood-icon.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  margin-right: 8px;
+}
+
+.public-moods-title {
+  display: flex;
+  align-items: center;
+}
+
+.public-icon {
+  width: 24px;
+  height: 30px;
+  background-image: url('public-icon.png');
+  background-size: cover;
+  background-repeat: no-repeat;
+  margin-right: 8px;
+}
+
+.exchange-icon {
+  width: 30px;
+  height: 30px;
+  background-image: url('exchangeBtn.jpeg');
+  background-size: cover;
+  background-repeat: no-repeat;
+  margin-right: 8px;
+  border-radius: 50%;
+}
+
+.diary-icon {
+  width: 30px;
+  height: 30px;
+  background-image: url('diary-icon.png');
+  background-size: cover;
+  background-repeat: no-repeat;
+  margin-right: 8px;
+  border-radius: 50%;
+}
+
 .title-moodsexchange {
   color: rgba(68, 136, 153, 1);
   font-size: 20px;
@@ -319,7 +362,7 @@ footer {
   color: rgba(102, 102, 102, 1);
   text-align: center;
   font-weight: bold;
-  margin-bottom: 5px;
+  margin-bottom: 10px;
 }
 
 .close-btn {
@@ -338,7 +381,7 @@ footer {
 
 .input-member {
   width: 100%;
-  max-height: 47px;
+  max-height: 77px;
   font-size: 16px;
   padding: 15px;
   margin-top: 10px;
@@ -458,6 +501,20 @@ footer {
   padding: 10px;
   margin-bottom: 10px;
   resize: vertical;
+}
+
+textarea {
+  width: 100%;
+  height: 300px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  padding: 10px;
+  margin-bottom: 10px;
+  resize: vertical;
+  box-sizing: border-box;
+  font-size: 20px;
 }
 
 .diary-save-btn {

@@ -577,6 +577,10 @@ async def update_profile(
             update_fields.append("avatar_url = %s")
             update_values.append(request.avatar_url)
 
+        if request.self_intro is not None:
+                update_fields.append("self_intro = %s")
+                update_values.append(request.self_intro)
+
         if request.new_password and request.new_password.strip():
             if not request.current_password:
                 raise HTTPException(status_code=400, detail="當前密碼必須提供")
@@ -598,22 +602,29 @@ async def update_profile(
                 update_fields.append("avatar_url = %s")
                 update_values.append(request.avatar_url)
         
-
         if update_fields:
             query = f"UPDATE users SET {', '.join(update_fields)} WHERE id = %s"
             update_values.append(current_user['id'])
             cursor.execute(query, tuple(update_values))
             db.commit()
 
-            cursor.execute("SELECT avatar_url FROM users WHERE id = %s", (current_user['id'],))
+            cursor.execute("SELECT avatar_url, self_intro FROM users WHERE id = %s", (current_user['id'],))
             updated_user = cursor.fetchone()
 
-            await redis_client.set(f"user_avatar:{current_user['id']}", json.dumps({"avatar_url": request.avatar_url}), ex=3600)
+            # 更新快取
+            cache_key = f"user_profile:{current_user['id']}"
+            cache_data = {
+                "avatar_url": updated_user['avatar_url'],
+                "self_intro": updated_user['self_intro']
+            }
+            await redis_client.set(cache_key, json.dumps(cache_data), ex=3600)  # 設置1小時過期
+            
             logger.info(f"User {current_user['id']} updated profile successfully")
             return JSONResponse(content={
                 'success': True, 
                 'message': 'Profile updated successfully',
-                'avatar_url': request.avatar_url if request.avatar_url else None
+                'avatar_url': updated_user['avatar_url'],
+                'self_intro': updated_user['self_intro']
             })
         else:
             logger.info(f"No updates for user {current_user['id']}")
@@ -764,3 +775,49 @@ async def create_pdf_response(entries):
         media_type="application/pdf",
         headers={"Content-Disposition": "attachment; filename=my_moods.pdf"}
     )
+
+@router.get("/get_user_profile")
+async def get_user_profile(
+    current_user: dict = Depends(get_current_user),
+    db: mysql.connector.connection.MySQLConnection = Depends(get_db)
+):
+    cache_key = f"user_profile:{current_user['id']}"
+    cached_profile = await redis_client.get(cache_key)
+    if cached_profile:
+        logging.info(f"Cache hit for user {current_user['id']}: {cached_profile}")
+        return json.loads(cached_profile)
+
+    logging.info(f"Cache miss for user {current_user['id']}")
+
+
+    try:
+        cursor = db.cursor(dictionary=True)
+        query = "SELECT avatar_url, self_intro FROM users WHERE id = %s"
+        cursor.execute(query, (current_user["id"],))
+        result = cursor.fetchone()
+
+        logging.info(f"Raw database result for user {current_user['id']}: {result}")
+
+        if not result:
+            logging.warning(f"User not found for ID: {current_user['id']}")            
+            return {"avatar_url": None, "self_intro": None}  # 返回空的資料而不是拋出異常
+
+         # 確保結果中的 None 值被正確處理
+        processed_result = {
+            "avatar_url": result["avatar_url"] if result["avatar_url"] is not None else None,
+            "self_intro": result["self_intro"] if result["self_intro"] is not None else None
+        }
+
+        logging.info(f"Processed result for user {current_user['id']}: {processed_result}")
+      
+        await redis_client.set(cache_key, json.dumps(result), ex=300)
+        return processed_result
+    except mysql.connector.Error as e:
+        logging.error(f"Database Error for user {current_user['id']}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
+    except Exception as e:
+        logging.error(f"Unexpected error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+    finally:
+        if cursor:
+            cursor.close()

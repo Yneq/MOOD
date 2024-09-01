@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, APIRouter, Depends, WebSocket, WebSocketDisconnect
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import List, Dict, Tuple, Set, Any
 from controllers.diary_controller import get_diary_entries
 from dependencies import get_db, get_current_user
@@ -14,6 +14,7 @@ from contextlib import closing
 from mysql.connector import pooling, Error
 import redis.asyncio as redis
 import json
+
 
 
 
@@ -310,9 +311,16 @@ async def request_exchange(
     cursor = db.cursor(dictionary=True)
     
     try:
+        # 將 24 小時前的待處理請求標記為過期
         cursor.execute("""
-            SELECT partner_id from user_matches WHERE user_id =%s
-            AND status = 'accepted'
+            UPDATE user_match_requests
+            SET status = 'expired'
+            WHERE status = 'pending' AND created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        """)
+
+        cursor.execute("""
+            SELECT partner_id from user_matches
+            WHERE user_id = %s AND status = 'accepted'
             ORDER BY created_at DESC LIMIT 1
         """, (current_user['id'],)) 
         result = cursor.fetchone()
@@ -324,24 +332,12 @@ async def request_exchange(
             await redis_client.delete(f"match_status:{partner_id}")
         else:
             cursor.execute("UPDATE users SET is_matching = 0 WHERE id = %s", (current_user['id'],))
-                        # 清除匹配夥伴的快取
 
-        # 檢查用戶在過去 3 天內的配對次數
-        cursor.execute("""
-            SELECT COUNT(*) as match_count
-            FROM user_matches
-            WHERE user_id = %s AND match_date >= DATE_SUB(CURDATE(), INTERVAL 3 DAY)
-        """, (current_user['id'],))
-        
-        match_count = cursor.fetchone()['match_count']
-        
-        if match_count >= 3:
-            return {"message": "You have reached the maximum number of matches in the past 3 days", "status": "limit_reached"}
-            
-        # 檢查用戶是否已經有待處理的請求
+        # 檢查用戶是否已經有待處理的請求（24小時內）
         cursor.execute("""
             SELECT * FROM user_match_requests 
             WHERE (requester_id = %s OR recipient_id = %s) AND status = 'pending'
+            AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
         """, (current_user['id'], current_user['id']))
         
         existing_request = cursor.fetchone()
@@ -353,11 +349,17 @@ async def request_exchange(
         cursor.execute("""
             SELECT id, name
             FROM users 
-            WHERE id != %s 
+            WHERE id != %s
             AND is_matching = 0 
-            AND id NOT IN (SELECT requester_id FROM user_match_requests WHERE status = 'pending')
-            AND id NOT IN (SELECT recipient_id FROM user_match_requests WHERE status = 'pending')
-            ORDER BY RAND() 
+            AND id NOT IN (
+                SELECT requester_id FROM user_match_requests 
+                WHERE status = 'pending' AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            )
+            AND id NOT IN (
+                SELECT recipient_id FROM user_match_requests 
+                WHERE status = 'pending' AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            )
+            ORDER BY RAND()
             LIMIT 1
         """, (current_user['id'],))
         
@@ -371,6 +373,13 @@ async def request_exchange(
             "INSERT INTO user_match_requests (requester_id, recipient_id, request_date, status) VALUES (%s, %s, CURDATE(), 'pending')",
             (current_user['id'], partner['id'])
         )
+         # 獲取剛插入的請求的 created_at 時間
+        cursor.execute(
+            "SELECT created_at FROM user_match_requests WHERE requester_id = %s AND recipient_id = %s AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+            (current_user['id'], partner['id'])
+        )
+        request_info = cursor.fetchone()
+        created_at = request_info['created_at'] if request_info else None
 
         db.commit()
 
@@ -378,8 +387,13 @@ async def request_exchange(
         await redis_client.delete(f"match_status:{current_user['id']}")
         await redis_client.delete(f"match_status:{partner['id']}")
 
-        return {"message": "Your match request is on its way!", "status": "success", "partner_id": partner['id']}
-        
+        logger.debug(f"SUCCESS request_exchange")
+        return {
+                    "message": "Your match request is on its way!",
+                    "status": "success",
+                    "partner_id": partner['id'],
+                    "created_at": created_at.isoformat() if created_at else None
+                }        
     except mysql.connector.Error as e:
         db.rollback()
         logger.error(f"Database error in request_exchange: {str(e)}")
@@ -388,7 +402,6 @@ async def request_exchange(
         db.rollback()
         logger.error(f"Database error in request_exchange: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-    
     finally:
         cursor.close()
 
@@ -397,18 +410,75 @@ async def get_matching_status(
     current_user: dict = Depends(get_current_user),
     db: mysql.connector.connection.MySQLConnection = Depends(get_db)
 ):
-    cache_key = f"match_status:{current_user['id']}"
+    # cache_key = f"match_status:{current_user['id']}"
 
-    cached_status = await redis_client.get(cache_key)
-    if cached_status:
-        print(f"Cache hit: {cache_key}")  # 調試信息
-        return json.loads(cached_status)
+    # cached_status = await redis_client.get(cache_key)
+    # if cached_status:
+    #     print(f"Cache hitttt: {cache_key}")  # 調試信息
+    #     return json.loads(cached_status)
 
-    print(f"Cache miss: {cache_key}")  # 調試信息
+    # print(f"Cache missss: {cache_key}")  # 調試信息
 
     cursor = db.cursor(dictionary=True)
     
     try:
+        # 用戶當前is_matching=0，檢查是否有待處理的請求
+        cursor.execute("""
+            SELECT 'outgoing' as request_type, recipient_id, requester_id, created_at
+            FROM user_match_requests 
+            WHERE requester_id = %s AND status = 'pending'
+            UNION
+            SELECT 'incoming' as request_type, recipient_id, requester_id, created_at
+            FROM user_match_requests 
+            WHERE recipient_id = %s AND status = 'pending'
+        """, (current_user['id'], current_user['id']))
+
+        pending_request = cursor.fetchone()
+
+        if pending_request:
+            pending_request['created_at'] = pending_request['created_at'].isoformat()
+
+            # 新增：計算剩餘時間
+            current_time = datetime.utcnow()
+            created_time = datetime.fromisoformat(pending_request['created_at'])
+            time_elapsed = current_time - created_time
+            remaining_time = timedelta(hours=24) - time_elapsed
+            
+            if remaining_time.total_seconds() > 0:            
+                if pending_request['request_type'] == 'outgoing':
+                    return {
+                        "status": "pending", 
+                        "message": "You have a pending outgoing match request",
+                        "recipient_id": pending_request.get('recipient_id'),
+                        "remaining_time_seconds": remaining_time.total_seconds(),
+                        "created_at": pending_request['created_at']                        
+                    }
+                elif pending_request['request_type'] == 'incoming':
+                    requester_id = pending_request.get('requester_id')
+                    if requester_id:
+                        cursor.execute("SELECT name FROM users WHERE id = %s", (requester_id,))
+
+                        requester_data = cursor.fetchone()
+                        requester_name = requester_data['name'] if requester_data else "Unknown"
+
+                        return {
+                            "status": "incoming_request",
+                            "message": f"You have a pending incoming match request from {requester_name}",
+                            "requester_id": requester_id,
+                            "requester_name": requester_name,
+                            "remaining_time_seconds": remaining_time.total_seconds(),
+                            "created_at": pending_request['created_at']
+                        }
+                    else:
+                        print(f"Error: requester_id not found in pending_request: {pending_request}")
+                        # await redis_client.set(cache_key, json.dumps(status), ex=300) 
+                        return {"status": "error", "message": "Invalid request data"}
+            else:
+                cursor.execute("UPDATE user_match_requests SET status = 'expired' WHERE id = %s", (pending_request['id'],))
+                db.commit()
+
+    # 如果沒有待處理的請求，再檢查現有匹配狀態
+               
     # 獲取用戶當前狀態和最新的match記錄，有雙方的is_matching
     # 第一個LEFT JOIN獲取最新的一個match
     # 第二個LEFT JOIN獲取匹配夥伴的資料
@@ -429,6 +499,9 @@ async def get_matching_status(
         """, (current_user['id'], current_user['id']))
     
         user_info = cursor.fetchone()
+        print(f"Debug: user_info = {user_info}")  # 添加這行來打印 user_info
+
+        status = {"status": "no_match", "message": "No buddy match now. Click EXCHANGE to find a diary buddy!"}        
 
             # 檢查是否存在user_matches.id
         if user_info['match_id'] is not None:
@@ -443,9 +516,7 @@ async def get_matching_status(
                 latest_match = cursor.fetchone()
             
                 if latest_match and latest_match['status'] == 'accepted':
-                    # # 確保雙方的 is_matching 狀態一致，為了解決當 B 接受後立即調用 checkMatchStatus()，發現 A 的 is_matching 仍為 0（可能是由於數據庫更新的延遲）
-                    # cursor.execute("UPDATE users SET is_matching = 1 WHERE id IN (%s, %s)", (current_user['id'], user_info['partner_id']))
-                    # db.commit()
+                    # 確保雙方的 is_matching 狀態一致，為了解決當 B 接受後立即調用 checkMatchStatus()，發現 A 的 is_matching 仍為 0（可能是由於數據庫更新的延遲）
                     # 匹配有效
                     status = {
                         "status": "accepted",
@@ -453,58 +524,14 @@ async def get_matching_status(
                         "partner_name": user_info['partner_name'],
                         "match_date": user_info['created_at'].isoformat() if user_info['created_at'] else None
                     }
-                    await redis_client.set(cache_key, json.dumps(status), ex=3600)
+                    # await redis_client.set(cache_key, json.dumps(status), ex=300)
                     return status
                 # 如果 is_matching 不為 1 或匹配狀態不為 'accepted'
             cursor.execute("UPDATE users SET is_matching = 0 WHERE id = %s", (current_user['id'],))
             db.commit()
-            await redis_client.set(cache_key, json.dumps(status), ex=3600)  # 1小時過期
-            return {"status": "match_expired", "message": "Your previous match has expired. Click EXCHANGE to find a new diary buddy!"}
-        else:
-            # 沒有匹配記錄
-            return {"status": "no_match", "message": "You don't have any current matches. Click EXCHANGE to find a diary buddy!"}
-
-        # 用戶當前is_matching=0，檢查是否有待處理的請求
-        cursor.execute("""
-            SELECT 'outgoing' as request_type, recipient_id, requester_id
-            FROM user_match_requests 
-            WHERE requester_id = %s AND status = 'pending'
-            UNION
-            SELECT 'incoming' as request_type, recipient_id, requester_id
-            FROM user_match_requests 
-            WHERE recipient_id = %s AND status = 'pending'
-        """, (current_user['id'], current_user['id']))
-
-        pending_request = cursor.fetchone()
-
-        if pending_request:
-            if pending_request['request_type'] == 'outgoing':
-                return {
-                    "status": "pending", 
-                    "message": "You have a pending outgoing match request",
-                    "recipient_id": pending_request.get('recipient_id')
-                }
-            elif pending_request['request_type'] == 'incoming':
-                requester_id = pending_request.get('requester_id')
-                if requester_id:
-                    cursor.execute("SELECT name FROM users WHERE id = %s", (requester_id,))
-
-                    requester_data = cursor.fetchone()
-                    requester_name = requester_data['name'] if requester_data else "Unknown"
-
-                    return {
-                        "status": "incoming_request",
-                        "message": f"You have a pending incoming match request from {requester_name}",
-                        "requester_id": requester_id,
-                        "requester_name": requester_name
-                    }
-                else:
-                    print(f"Error: requester_id not found in pending_request: {pending_request}")
-                    await redis_client.set(cache_key, json.dumps(status), ex=600)  # 10分鐘過期
-                    return {"status": "error", "message": "Invalid request data"}
-
-        await redis_client.set(cache_key, json.dumps(status), ex=3600)  # 1小時過期
-        return {"status": "no_match", "message": "NO partner matched yet. Click EXCHANGE to find a diary buddy!"}
+            # await redis_client.set(cache_key, json.dumps(status), ex=300)
+        return {"status": "no_match", "message": "You don't have any current matches. Click EXCHANGE to find a diary buddy!"}
+        
     except Exception as e:
         print(f"Error in get_matching_status: {str(e)}")
         return {"status": "error", "detail": f"Unexpected error: {str(e)}"}
@@ -590,6 +617,58 @@ async def get_partner_diary(
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
     finally:
         cursor.close()
+
+@router.get("/get_partner_info/{partner_id}")
+async def get_partner_info(
+    partner_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: mysql.connector.connection.MySQLConnection = Depends(get_db)
+):
+    cursor = db.cursor(dictionary=True)
+    try:
+        # 首先檢查是否有權限獲取該夥伴的信息
+        cursor.execute("""
+            SELECT um.partner_id
+            FROM user_matches um
+            JOIN users u1 ON um.user_id = u1.id
+            JOIN users u2 ON um.partner_id = u2.id
+            WHERE um.user_id = %s AND um.partner_id = %s AND um.status = 'accepted'
+            AND u1.is_matching = 1 AND u2.is_matching = 1
+            ORDER BY um.created_at DESC
+            LIMIT 1
+        """, (current_user['id'], partner_id))
+        
+        match = cursor.fetchone()
+        if not match:
+            raise HTTPException(status_code=403, detail="你沒有權限查看此用戶的資料")
+
+        # 獲取夥伴的資料
+        cursor.execute("""
+            SELECT id, name, avatar_url, self_intro
+            FROM users
+            WHERE id = %s
+        """, (partner_id,))
+        
+        partner_info = cursor.fetchone()
+        if not partner_info:
+            raise HTTPException(status_code=404, detail="找不到該用戶")
+
+        return {
+            "id": partner_info['id'],
+            "name": partner_info['name'],
+            "avatar_url": partner_info['avatar_url'],
+            "self_intro": partner_info['self_intro'] or "這位使用者還沒有填寫自我介紹。"
+        }
+
+    except HTTPException as http_ex:
+        raise http_ex
+    except Exception as e:
+        logger.error(f"獲取夥伴資料時發生錯誤: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取夥伴資料時發生錯誤: {str(e)}")
+    finally:
+        cursor.close()
+
+
 
 # websocket================
 class ConnectionManager:

@@ -407,7 +407,7 @@ a {
     color: rgba(102, 102, 102, 1);
     text-align: center;
     font-weight: bold;
-    margin-bottom: 5px;
+    margin-bottom: 10px;
 }
   
 .close-btn {
@@ -424,7 +424,7 @@ a {
   
 .input-member {
     width: 100%;
-    max-height: 47px;
+    max-height: 77px;
     font-size: 16px;
     padding: 15px;
     margin-top: 10px;
@@ -578,7 +578,7 @@ a {
 
 .recent-diary-entry {
     margin-bottom: 15px;
-    padding: 10px;
+    padding: 20px;
     background-color: rgb(18 45 81 / 75%);
     border-radius: 15px;
     cursor: pointer;

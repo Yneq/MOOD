@@ -9,6 +9,8 @@ class ProfileUpdateRequest(BaseModel):
     current_password: Optional[str] = None
     new_password: Optional[str] = None
     avatar_url: Optional[str] = None
+    self_intro: Optional[str] = None
+
 
 class MessageRequest(BaseModel):
     text: str

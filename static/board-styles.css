@@ -192,7 +192,7 @@ textarea {
     border: none;
     border-radius: 10px;
     color: #fff;
-    padding: 10px;
+    padding: 30px;
     margin-bottom: 10px;
     resize: vertical;
     box-sizing: border-box;
@@ -232,7 +232,7 @@ button:hover {
 
 .message {
     border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 10px;
+    padding: 30px;
     margin-top: 20px;
     position: relative;
     background: rgb(13 28 50 / 68%);
@@ -378,7 +378,7 @@ a {
     color: rgba(102, 102, 102, 1);
     text-align: center;
     font-weight: bold;
-    margin-bottom: 5px;
+    margin-bottom: 10px;
 }
   
 .close-btn {
@@ -395,7 +395,7 @@ a {
   
 .input-member {
     width: 100%;
-    max-height: 47px;
+    max-height: 77px;
     font-size: 16px;
     padding: 15px;
     margin-top: 10px;
@@ -409,7 +409,6 @@ a {
     width: 100%;
     font-size: 19px;
     background-color: rgb(100 109 112);
-    margin-top: 10px;
     margin-bottom: 10px;
     border-radius: 5px;
     padding: 15px;

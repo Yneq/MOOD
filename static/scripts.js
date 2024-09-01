@@ -5,6 +5,11 @@ let currentPartnerId = null;
 let currentMoodScore = 0;
 let currentWeather = 'sunny';
 let isLoggedIn = !!localStorage.getItem('token');
+let isExchangeButtonDisabled = false;
+let countdownInterval;
+let isViewingPartnerProfile = false;
+
+
 
 
 const SAVE_COOLDOWN = 5000; 
@@ -20,14 +25,20 @@ function initializeMatchPage() {
             connectWebSocket();
         }
         exchangeBtn.addEventListener('click', handleExchangeRequest);
-        checkPendingRequests();
+        checkPendingRequests();   //抓取partner名字
     }
     checkMatchStatus(); // 初始檢查
     // setInterval(checkMatchStatus, 60000); // 每分鐘檢查一次
 }
 
 async function handleExchangeRequest() {
+    if (isExchangeButtonDisabled) {
+        console.log('Exchange button is already disabled');
+        return;
+    }
     try {
+        // 禁用 Exchange 按鈕
+        disableExchangeButton(exchangeBtn);
         const token = localStorage.getItem('token');
 
         const response = await retryOperation(() => 
@@ -49,45 +60,58 @@ async function handleExchangeRequest() {
         if (!data) {
             throw new Error('No data received from server');
         }
-        
-        if (data.status === 'success') {
-            showNotification('Your match request is on its way!');
-            checkMatchStatus();
-        } else if (data.status === 'pending') {
-            showNotification('A new diary buddy is waiting!');
-            // 這裡考慮 checkMatchStatus();
-        } else {
-            showNotification(data.message || 'Unknown status received');
+        switch (data.status){
+            case 'success':
+            case 'pending':
+                showNotification('Your match request is on its way!');
+                clearPartnerInfo(); // 清除舊的配對者信息
+                updateExchangeButton(data);
+                break;
+            case 'no_match':
+                showNotification(data.message);
+                enableExchangeButton(exchangeBtn); // 允許用戶再次嘗試
+                break;
+            default:
+                showNotification(data.message || 'Unknown status received');
+                enableExchangeButton(exchangeBtn); // 如果是未知狀態，重新啟用按鈕
         }
+
+        checkMatchStatus(); // 在所有情況下都檢查匹配狀態
     } catch (error) {
         console.error('Error:', error);
         if (error.response) {
             console.error('Error response:', await error.response.text());
         }        
-        showNotification('Your partner\'s diary is still empty! Maybe they\'re busy exploring a magical world');
+        showNotification('An error occurred. Please try again later.');
+        enableExchangeButton(exchangeBtn); // 如果發生錯誤，重新啟用按鈕
     }
 }
 
+
 const partnerDiaryContent = document.getElementById('partnerDiaryContent');
+
 async function checkMatchStatus() {
     try {
-        const token = localStorage.getItem('token');
-
         const response = await retryOperation(() => 
             fetch('/matching/status', {
                 headers: {
-                    'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
                 }
             })
-        )
+        );
 
         const data = await response.json();
         console.log('Match status response:', data);
+        
+        updateExchangeButton(data);
 
         const partnerNameElement = document.querySelector('.partner-name');
+        const exchangeBtn = document.getElementById('exchangeBtn');
+
 
         switch(data.status) {
             case 'accepted':
+                // 檢查配對是否在24小時內
                 console.log(`Match accepted with partner Name: ${data.partner_name}`);
                 if (currentPartnerId !== data.partner_id) {
                     currentPartnerId = data.partner_id;
@@ -121,35 +145,38 @@ async function checkMatchStatus() {
                 if (partnerDiaryContent) {
                     partnerDiaryContent.innerHTML = partnerDiary || '<p>Your partner hasn\'t written any diary entries yet. Check back later!</p>';
                     }
+                enableExchangeButton(exchangeBtn); //new
                 break;
             case 'pending':
-            console.log(`Match accepted with partner Name: ${data.partner_name}`);
+            case 'incoming_request':
+                console.log(`Pending request: ${data.message}`);
                 if (partnerDiaryContent) {
-                    partnerDiaryContent.innerHTML = `<p>${data.message}</p>`;
+                    if (data.status === 'pending') {
+                        partnerDiaryContent.innerHTML = `<p>You have a pending outgoing match request. Waiting for response...</p>`;
+                    } else {
+                        partnerDiaryContent.innerHTML = `<p>You have a pending incoming match request from ${data.requester_name}. Please respond!</p>`;
+                    }
                 }
-                setTimeout(checkMatchStatus, 60000); // 每60秒檢查一次
-                break;
-            case 'partner_repairing':
-                console.log('Partner is repairing');
-                if (partnerDiaryContent) {
-                    partnerDiaryContent.innerHTML = `<p>${data.message}</p>`;
-                }
-                // setTimeout(checkMatchStatus, 60000); // 每60秒檢查一次
+                disableExchangeButton(exchangeBtn);
                 break;
             case 'no_match':
-            case 'partner_repairing':
+            case 'match_expired':
                 console.log(data.status, data.message);
                 currentPartnerId = null;
+                clearPartnerInfo(); //new
                 if (partnerDiaryContent) {
                     partnerDiaryContent.innerHTML = `<p>${data.message}</p>`;
                 }
+                enableExchangeButton(exchangeBtn);
                 break;
             default:
-                console.log('No active match or unknown status');
+                console.log('No active match or default status');
                 currentPartnerId = null;
+                clearPartnerInfo(); //new
                 if (partnerDiaryContent) {
-                    partnerDiaryContent.innerHTML = `<p>${data.message || 'No buddy match now'}</p>`;
+                    partnerDiaryContent.innerHTML = `<p>${data.message}</p>`;
                 }
+                enableExchangeButton(exchangeBtn);
                 break;
         }
     } catch (error) {
@@ -158,8 +185,108 @@ async function checkMatchStatus() {
         if (partnerDiaryContent) {
             partnerDiaryContent.innerHTML = '<p>Your partner\'s diary is still empty! Maybe they\'re busy exploring a magical world</p>';
         }
+        enableExchangeButton(document.getElementById('exchangeBtn'));
     }
 }
+
+function clearPartnerInfo() {
+    const partnerNameElement = document.querySelector('.partner-name');
+    const tooltip = document.getElementById('partnerNameTooltip');
+
+    if (partnerNameElement) {
+        partnerNameElement.style.backgroundImage = '';
+        partnerNameElement.textContent = '';
+        partnerNameElement.style.display = 'none';
+    }
+
+    if (tooltip) {
+        tooltip.textContent = '';
+        tooltip.style.visibility = 'hidden';
+        tooltip.style.opacity = '0';
+    }
+}
+
+function disableExchangeButton(button) {
+    if (button && !isExchangeButtonDisabled) {
+        button.disabled = true;
+        button.style.opacity = '0.5';
+        button.style.cursor = 'not-allowed';
+        isExchangeButtonDisabled = true;
+    }
+}
+
+function enableExchangeButton(button) {
+    if (button && isExchangeButtonDisabled) {
+        button.disabled = false;
+        button.style.opacity = '1';
+        button.style.cursor = 'pointer';
+        isExchangeButtonDisabled = false;
+    }
+}
+
+function updateExchangeButton(matchData) {
+    console.log('updateExchangeButton called with data:', matchData);
+    const exchangeBtn = document.getElementById('exchangeBtn');
+    const exchangeCountdown = document.getElementById('exchangeCountdown');
+
+    if (!exchangeBtn || !exchangeCountdown) {
+        console.log('Exchange button or countdown element not found on this page');
+        return;
+    }
+
+    if (matchData.status === 'pending' || matchData.status === 'incoming_request') {
+        disableExchangeButton(exchangeBtn);
+        exchangeCountdown.style.display = 'block';
+        startCountdown(matchData.remaining_time_seconds);
+    } else {
+        enableExchangeButton(exchangeBtn);
+        exchangeCountdown.style.display = 'none';
+        stopCountdown();
+    }
+}
+
+function startCountdown(remainingTimeSeconds, status) {
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+    }
+    
+    function updateCountdown() {
+        const countdownTime = document.getElementById('countdownTime');
+        if (remainingTimeSeconds > 0) {
+            const hours = Math.floor(remainingTimeSeconds / 3600);
+            const minutes = Math.floor((remainingTimeSeconds % 3600) / 60);
+            const seconds = Math.floor(remainingTimeSeconds % 60);
+
+            let countdownText = `${hours}h ${minutes}m ${seconds}s`;
+            if (status === 'pending') {
+                countdownText += " until request expires";
+            } else if (status === 'incoming_request') {
+                countdownText += " to respond";
+            }
+            
+            countdownTime.textContent = countdownText;
+            remainingTimeSeconds--;
+        } else {
+            stopCountdown();
+            checkMatchStatus();
+        }
+    }
+
+    updateCountdown();
+    countdownInterval = setInterval(updateCountdown, 1000);
+}
+
+function stopCountdown() {
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    const countdownTime = document.getElementById('countdownTime');
+    if (countdownTime) {
+        countdownTime.textContent = '';
+    }
+}
+
 
 async function loadPartnerDiary(partnerId) {
     console.log(`Attempting to load partner diary for partner ID: ${partnerId}`);
@@ -197,7 +324,7 @@ async function loadPartnerDiary(partnerId) {
         }
 
         if (!response.ok) {
-            console.error('Server error response:', errorData);
+            console.error('Server error response:', data);
             throw new Error(data.detail || `HTTP error! status: ${response.status}`);            
         }    
 
@@ -210,9 +337,8 @@ async function loadPartnerDiary(partnerId) {
             diaryContent = data.map(entry => `
                 <div class="partnerdiary-entry">
                     <div class="moodsDate">${entry.date}</div>
-                    <div class="partnerdiary-content">
                         <p>${entry.content}</p>
-                    </div>
+
                 </div>
             `).join('');
             console.log(`Rendered ${data.length} diary entries`);
@@ -383,44 +509,105 @@ const avatarPreview = document.getElementById('avatar-preview');
 const selfIntroElement = document.getElementById('self-intro');
 
 async function updateUserDisplay() {
-        const userName = localStorage.getItem('user_name');
-        const isLoggedIn = !!localStorage.getItem('token');
-        const avatarUrl = await loadUserAvatar();
+    const isLoggedIn = !!localStorage.getItem('token');
 
+    if (!isLoggedIn) {
+        // 如果未登錄,清除所有用戶相關顯示
         if (userAvatar) {
             userAvatar.style.backgroundImage = '';
             userAvatar.textContent = '';
             userAvatar.style.display = 'none';
-            selfIntroElement.inpute = '';
         }
-
         if (selfIntroElement) {
-            const savedSelfIntro = localStorage.getItem('selfIntro');
-            if (savedSelfIntro) {
-                selfIntroElement.value = savedSelfIntro;
-            }
+            selfIntroElement.value = '';
         }
-
-        if (userName && userAvatar) {
-            userAvatar.textContent = userName.charAt(0).toUpperCase();
-            userAvatar.style.display = 'flex';
-            
-            if (avatarUrl != null) {
-                avatarPreview.style.backgroundImage = `url('${avatarUrl}')`;
-            } else {
-                // 使用 CSS 中定義的默認頭像
-                avatarPreview.style.backgroundImage = '';
-            }
-        } else if (userAvatar) {
-            userAvatar.style.display = 'none';
+        if (avatarPreview) {
+            avatarPreview.style.backgroundImage = '';
         }
-
         if (loginBtn) {
-            loginBtn.textContent = isLoggedIn ? 'Sign out' : 'Sign in';
-        } else {
-            console.error('Login button not found');
+            loginBtn.textContent = 'Sign in';
         }
-        loadUserAvatar()
+        localStorage.removeItem('avatarUrl'); // 清除存儲的頭像 URL
+        return;
+    }
+
+    try {
+        const response = await fetch('/get_user_profile', {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            
+            // 更新自我介紹
+            if (selfIntroElement) {
+                selfIntroElement.value = data.self_intro || '';
+                localStorage.setItem('selfIntro', data.self_intro || '');
+            }
+            
+            // 更新頭像
+            const avatarUrl = data.avatar_url;
+            localStorage.setItem('avatarUrl', avatarUrl || ''); // 將頭像 URL 存儲在 localStorage 中
+            if (userAvatar) {
+                if (avatarUrl) {
+                    userAvatar.style.backgroundImage = `url('${avatarUrl}')`;
+                    userAvatar.textContent = '';
+                    userAvatar.style.display = 'flex';
+                } else {
+                    const userName = localStorage.getItem('user_name');
+                    if (userName) {
+                        userAvatar.style.backgroundImage = '';
+                        userAvatar.textContent = userName.charAt(0).toUpperCase();
+                        userAvatar.style.display = 'flex';
+                    } else {
+                        userAvatar.style.backgroundImage = '';
+                        userAvatar.textContent = '';
+                        userAvatar.style.display = 'none';
+                    }
+                }
+            }
+            
+            if (avatarPreview) {
+                avatarPreview.style.backgroundImage = avatarUrl ? `url('${avatarUrl}')` : '';
+            }
+            
+            // 更新登錄按鈕
+            if (loginBtn) {
+                loginBtn.textContent = 'Sign out';
+            }
+        } else {
+            console.error('Failed to fetch user profile');
+        }
+    } catch (error) {
+        console.error('Error fetching user profile:', error);
+    }
+}
+
+async function saveSelfIntro() {
+    const selfIntro = selfIntroElement.value;
+    try {
+        const response = await fetch('/update_profile', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ self_intro: selfIntro })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            localStorage.setItem('selfIntro', data.self_intro);
+            showMessage(document.querySelector('.success-self-info'), 'Self introduction saved successfully!');
+        } else {
+            showMessage(document.querySelector('.fail-self-info'), 'Failed to save self introduction. Please try again later.');
+        }
+    } catch (error) {
+        console.error('Error saving self introduction:', error);
+        showMessage(document.querySelector('.fail-self-info'), 'An error occurred while saving. Please try again.');
+    }
 }
 
 async function loadUserAvatar(targetUserId = null) {
@@ -461,7 +648,120 @@ async function loadUserAvatar(targetUserId = null) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => loadUserAvatar());
+
+
+// 初始化夥伴資料模態框
+function initializePartnerModal() {
+    const partnerNameElement = document.getElementById('partnerName');
+    if (partnerNameElement) {
+        partnerNameElement.addEventListener('click', handlePartnerNameClick);
+    }
+}
+
+// 處理夥伴名稱點擊事件
+function handlePartnerNameClick() {
+    if (currentPartnerId) {
+        openPartnerModal(currentPartnerId);
+    } else {
+        console.log('No partner ID available');
+    }
+}
+
+// 打開夥伴資料模態框
+function openPartnerModal(partnerId) {
+    const userProfileModal = document.getElementById('user-profile-modal');
+    const overlay = document.querySelector('.overlay');
+    if (userProfileModal && overlay) {
+        userProfileModal.style.display = 'block';
+        overlay.style.display = 'block';
+        fetchPartnerInfo(partnerId);
+    }
+}
+
+function closeUserProfileModal() {
+    if (userProfileModal) {
+        userProfileModal.style.display = 'none';
+        overlay.style.display = 'none';
+        isViewingPartnerProfile = false;
+    }
+}
+
+// 獲取夥伴資料
+async function fetchPartnerInfo(partnerId) {
+    try {
+        const response = await fetch(`/get_partner_info/${partnerId}`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+        if (!response.ok) {
+            throw new Error('無法獲取夥伴資料');
+        }
+        const data = await response.json();
+        updatePartnerModalContent(data);
+    } catch (error) {
+        console.error('獲取夥伴資料時發生錯誤:', error);
+        showNotification('There is no partner INFO.');
+    }
+}
+
+// 更新夥伴模態框內容
+function updatePartnerModalContent(partnerInfo) {
+    const modalTitle = document.querySelector('#user-profile-modal .log-in');
+    const avatarPreview = document.getElementById('avatar-preview');
+    const selfIntroElement = document.getElementById('self-intro');
+    const passwordFields = document.getElementById('password-fields');
+    const changePasswordBtn = document.getElementById('change-password-btn');
+    const submitButton = document.querySelector('#user-profile-modal button[type="submit"]');
+
+    if (modalTitle) modalTitle.textContent = "Partner INFO.";
+    
+    updatePartnerAvatar(avatarPreview, partnerInfo);
+    updatePartnerSelfIntro(selfIntroElement, partnerInfo);
+    hidePartnerSpecificElements(passwordFields, changePasswordBtn, submitButton);
+}
+
+function updatePartnerAvatar(avatarPreview, partnerInfo) {
+    if (avatarPreview) {
+        if (partnerInfo.avatar_url) {
+            avatarPreview.style.backgroundImage = `url('${partnerInfo.avatar_url}')`;
+            avatarPreview.textContent = '';
+        } else {
+            avatarPreview.style.backgroundImage = '';
+            avatarPreview.textContent = partnerInfo.name.charAt(0).toUpperCase();
+        }
+    }
+}
+
+function updatePartnerSelfIntro(selfIntroElement, partnerInfo) {
+    if (selfIntroElement) {
+        selfIntroElement.value = partnerInfo.self_intro || 'There is no moods yet...';
+        selfIntroElement.readOnly = true;
+    }
+}
+
+const passwordFields = document.getElementById('password-fields');
+const avatarUploadLabel = document.querySelector('.avatar-label span:last-child');
+const avatarUploadInput = document.getElementById('avatar-upload');
+
+function hidePartnerSpecificElements(passwordFields, changePasswordBtn, submitButton) {
+    if (passwordFields) passwordFields.style.display = 'none';
+    if (changePasswordBtn) changePasswordBtn.style.display = 'none';
+    if (submitButton) submitButton.style.display = 'none';
+    //隱藏頭像上傳相關元素
+    if (avatarUploadLabel) {
+        avatarUploadLabel.style.display = 'none';
+    }
+    if (avatarUploadInput) {
+        avatarUploadInput.disabled = true;
+    }
+}
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadUserAvatar();
+    initializePartnerModal();
+});
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM fully loaded and parsed');
@@ -496,7 +796,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
 
-    // await updateUserDisplay();
     
     // 登入按鈕事件
     if (loginBtn) {
@@ -524,19 +823,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
     }
-
-    // // 處理 "START PUBLIC MOODs" 按鈕點擊事件
-    // const startPublicMoodsBtn = document.getElementById('startPublicMoodsBtn');
-    // if (startPublicMoodsBtn) {
-    //     startPublicMoodsBtn.addEventListener('click', function(e) {
-    //         e.preventDefault();
-    //         if (isLoggedIn) {
-    //             window.location.href = '/static/board.html'; // 已登入，跳轉到 board.html
-    //         } else {
-    //             showLoginModal(); // 未登入，顯示登入框
-    //         }
-    //     });
-    // }
 
     // 處理 "MOODs EXCANGE" 按鈕點擊事件
     const moodsExchangeBtn = document.getElementById('moodsExchangeBtn');
@@ -832,54 +1118,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
     let currentEntryId = null;
-
-    // 新增：檢查今天的日記
-    function checkTodayDiary() {
-        const token = localStorage.getItem('token');
-        const today = new Date().toISOString().split('T')[0];
-
-        fetch(`/get_diary_entry/${today}`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data && data.id) {
-                // 今天已經有日記
-                diaryContent.value = data.content;
-                saveDiaryBtn.textContent = 'UPDATE';
-                currentEntryId = data.id;
-
-                // 更新 selectedDiaryContent（如果存在）
-                const selectedDiaryContent = document.getElementById('selectedDiaryContent');
-                if (selectedDiaryContent) {
-                    selectedDiaryContent.textContent = data.content;
-                }
-
-                // 更新日期顯示（如果有的話）
-                const selectedDateElement = document.getElementById('selectedDate');
-                if (selectedDateElement) {
-                    selectedDateElement.textContent = today;
-                }
-            } else {
-                // 今天還沒有日記
-                diaryContent.value = '';
-                saveDiaryBtn.textContent = 'SAVE';
-                currentEntryId = null;
-                
-                // 清空 selectedDiaryContent（如果存在）
-                const selectedDiaryContent = document.getElementById('selectedDiaryContent');
-                if (selectedDiaryContent) {
-                    selectedDiaryContent.textContent = '';
-                }
-            }
-        })
-        .catch(error => {
-            console.error('Error checking today\'s diary:', error);
-        });
-    }
-    
+        
     // 加載今天的日記
     loadDiaryEntry(new Date());
 
@@ -1130,15 +1369,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateCalendar(currentYear, currentMonth);
             updateMonthYearDisplay(currentYear, currentMonth);
         });
-
-        // if (saveDiaryBtn) {
-        //     saveDiaryBtn.addEventListener('click', saveDiaryEntry);
-        // }
     }   // 在頁面加載時初始化日曆尾部=============
 
 
     currentEntryId = null;
-    // let isEditing = false;
 
     async function loadDiaryEntry(date, entryId = null) {
         const token = localStorage.getItem('token');
@@ -1577,42 +1811,49 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, delay);
     }
 
-//編輯個人資料
+    // 更新用戶自己的模態框內容
+    function updateUserModalContent() {
+        const modalTitle = document.querySelector('#user-profile-modal .log-in');
+        const avatarPreview = document.getElementById('avatar-preview');
+        const selfIntroElement = document.getElementById('self-intro');
+        const passwordFields = document.getElementById('password-fields');
+        const changePasswordBtn = document.getElementById('change-password-btn');
+        const submitButton = document.querySelector('#user-profile-modal button[type="submit"]');
 
-    const userAvatar = document.getElementById('userAvatar');
-    const userProfileModal = document.getElementById('user-profile-modal');
-    const profileForm = document.getElementById('profile-form');
-    const avatarUpload = document.getElementById('avatar-upload');
-    const changePasswordBtn = document.getElementById('change-password-btn');
-    const passwordFields = document.getElementById('password-fields');
+        if (modalTitle) modalTitle.textContent = "MOOD account";
+        
+        updateAvatarDisplay(avatarPreview);
+        updateSelfIntro(selfIntroElement);
+        showUserSpecificElements(passwordFields, changePasswordBtn, submitButton);
+    }
 
-    if (userAvatar && avatarPreview) {
-        try {
-            const avatarUrl = await loadUserAvatar();
+
+    function updateAvatarDisplay(avatarPreview) {
+        if (avatarPreview) {
+            const avatarUrl = localStorage.getItem('avatarUrl');
             if (avatarUrl) {
-                userAvatar.style.backgroundImage = `url('${avatarUrl}')`;
                 avatarPreview.style.backgroundImage = `url('${avatarUrl}')`;
-                userAvatar.textContent = '';
                 avatarPreview.textContent = '';
             } else {
-                // 如果沒有頭像，顯示默認圖片或名字首字母
-                const currentUserName = localStorage.getItem('user_name');
-                if (currentUserName) {
-                    userAvatar.textContent = currentUserName.charAt(0).toUpperCase();
-
-                } else {
-                    // 如果連用戶名也沒有，設置一個默認圖片
-                    userAvatar.style.backgroundImage = '';
-                    avatarPreview.style.backgroundImage = '';
-                }
+                avatarPreview.style.backgroundImage = '';
+                avatarPreview.textContent = localStorage.getItem('user_name').charAt(0).toUpperCase();
             }
-        } catch (error) {
-            console.error('Error setting user avatar:', error);
-            // 處理錯誤，可能顯示一個默認圖片
         }
-    } else {
-        console.error('userAvatar or avatarPreview element not found');
     }
+
+    function updateSelfIntro(selfIntroElement) {
+        if (selfIntroElement) {
+            selfIntroElement.value = localStorage.getItem('selfIntro') || '';
+            selfIntroElement.readOnly = false;
+        }
+    }
+
+    function showUserSpecificElements(passwordFields, changePasswordBtn, submitButton) {
+        if (passwordFields) passwordFields.style.display = 'none';
+        if (changePasswordBtn) changePasswordBtn.style.display = 'block';
+        if (submitButton) submitButton.style.display = 'block';
+    }
+
 
     function clearPasswordFields() {
         document.getElementById('current-password').value = '';
@@ -1632,13 +1873,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    const userProfileModal = document.getElementById('user-profile-modal');
+
     if (userAvatar) {
         userAvatar.addEventListener('click', function() {
             if (userProfileModal) {
-                userProfileModal.style.display = 'block';
-                overlay.style.display = 'block';
-                clearPasswordFields();
-                resetPasswordChangeUI();
+                isViewingPartnerProfile = false;
+                openUserProfileModal();
             }
         });
     }
@@ -1652,8 +1893,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
     }
+    // 新的開啟用戶個人資料模態框函數
+    function openUserProfileModal() {
+        if (userProfileModal) {
+            userProfileModal.style.display = 'block';
+            overlay.style.display = 'block';
+            clearPasswordFields();
+            resetPasswordChangeUI();
+            updateUserModalContent();
+        }
+    }
 
     // 頭像預覽
+    const avatarUpload = document.getElementById('avatar-upload');
     avatarUpload.addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (file) {
@@ -1665,6 +1917,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
     
+    const changePasswordBtn = document.getElementById('change-password-btn');
     // 顯示/隱藏密碼欄位
     changePasswordBtn.addEventListener('click', function() {
         passwordFields.style.display = passwordFields.style.display === 'none' ? 'block' : 'none';
@@ -1681,6 +1934,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    const profileForm = document.getElementById('profile-form');
 
     if (profileForm) {
         profileForm.addEventListener('submit', async function(e) {
@@ -1693,6 +1947,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const newPassword = document.getElementById('new-password').value;
         const confirmPassword = document.getElementById('confirm-password').value;
         const avatarFile = document.getElementById('avatar-upload').files[0];
+        const selfIntro = document.getElementById('self-intro').value;  // 獲取 self-intro 的值
+
         
         const formData = new FormData(this);
         formData.delete('self_intro');  //存localstorage，不發送後端
@@ -1752,7 +2008,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 body: JSON.stringify({
                     current_password: currentPassword,
                     new_password: newPassword,
-                    avatar_url: avatarUrl
+                    avatar_url: avatarUrl,
+                    self_intro: selfIntro  // 添加 self_intro 到發送的數據中
                 }),
                 headers: {
                     'Content-Type': 'application/json',
@@ -1768,6 +2025,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             if (result.success) {
                 console.log('Update successful, received result:', result);
+
+                localStorage.setItem('selfIntro', selfIntro);
 
                 showMessage(document.querySelector('.success-self-info'), 'Update profile successfully');
                 if (result.avatar_url) {
@@ -1785,6 +2044,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } else {
                     console.log('No avatar_url in the result');
                 }
+                localStorage.setItem('selfIntro', selfIntro);
             } else {
                 console.error('Update failed:', result.message);
                 showMessage(document.querySelector('.fail-self-info'), result.message || 'Update profile failed');
