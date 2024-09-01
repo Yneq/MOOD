@@ -121,6 +121,10 @@ margin-left: 10px;
 
 
 .title {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start; 
     color: rgba(68, 136, 153, 1);
     font-size: 30px;
     font-weight: bold;
@@ -243,6 +247,7 @@ button:hover {
 .message img {
     max-width: 100%;
     max-height: 300px;
+    margin-left: 50px;
 }
 
 
@@ -322,14 +327,14 @@ button:hover {
 
 .delete-button {
     position: absolute;
-    top: 5px;
-    right: 5px;
+    top: 15px;
+    right: 15px;
     cursor: pointer;
     background-color: rgba(68, 136, 153, 1);
     color: white;
     border: none;
     padding: 5px 10px;
-    border-radius: 3px;
+    border-radius: 5px;
 }
 
 footer {
@@ -475,12 +480,18 @@ a {
 .user-identifier {
     font-weight: bold;
     color: #007bff;
+    position: absolute;
+    left: 30px;
+    top: 14px;
 }
 
 .timestamp {
     font-size: 0.8em;
     color: #666;
     margin-left: 10px;
+    position: absolute;
+    right: 45px;
+    bottom: 15px;
 }
 
 .message-container {
@@ -512,6 +523,43 @@ a {
     background-color: #2196F3;
 }
 
+.mood-icon {
+    width: 36px;
+    height: 24px;
+    background-image: url('mood-icon.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    margin-right: 8px;
+}
+
+.public-icon {
+    width: 24px;
+    height: 30px;
+    background-image: url('public-icon.png');
+    background-size: cover;
+    background-repeat: no-repeat;
+    margin-right: 8px;
+}
+
+.exchange-icon {
+    width: 30px;
+    height: 30px;
+    background-image: url('exchangeBtn.jpeg');
+    background-size: cover;
+    background-repeat: no-repeat;
+    margin-right: 8px;
+    border-radius: 50%;
+}
+  
+.diary-icon {
+    width: 30px;
+    height: 30px;
+    background-image: url('diary-icon.png');
+    background-size: cover;
+    background-repeat: no-repeat;
+    margin-right: 8px;
+    border-radius: 50%;
+}
 
 
 /* 新增媒體查詢 */

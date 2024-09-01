@@ -422,6 +422,13 @@ async def get_matching_status(
     cursor = db.cursor(dictionary=True)
     
     try:
+         # 首先，更新過期的請求
+        cursor.execute("""
+            UPDATE user_match_requests
+            SET status = 'expired'
+            WHERE status = 'pending' AND created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        """)
+        db.commit()
         # 用戶當前is_matching=0，檢查是否有待處理的請求
         cursor.execute("""
             SELECT 'outgoing' as request_type, recipient_id, requester_id, created_at
@@ -476,8 +483,8 @@ async def get_matching_status(
             else:
                 cursor.execute("UPDATE user_match_requests SET status = 'expired' WHERE id = %s", (pending_request['id'],))
                 db.commit()
-
-    # 如果沒有待處理的請求，再檢查現有匹配狀態
+            
+    # 如果沒有待處理的請求，再繼續執行下面檢查現有匹配狀態
                
     # 獲取用戶當前狀態和最新的match記錄，有雙方的is_matching
     # 第一個LEFT JOIN獲取最新的一個match
@@ -526,7 +533,7 @@ async def get_matching_status(
                     }
                     # await redis_client.set(cache_key, json.dumps(status), ex=300)
                     return status
-                # 如果 is_matching 不為 1 或匹配狀態不為 'accepted'
+
             cursor.execute("UPDATE users SET is_matching = 0 WHERE id = %s", (current_user['id'],))
             db.commit()
             # await redis_client.set(cache_key, json.dumps(status), ex=300)
@@ -657,7 +664,7 @@ async def get_partner_info(
             "id": partner_info['id'],
             "name": partner_info['name'],
             "avatar_url": partner_info['avatar_url'],
-            "self_intro": partner_info['self_intro'] or "這位使用者還沒有填寫自我介紹。"
+            "self_intro": partner_info['self_intro'] or "Your partner is still on the fence..."
         }
 
     except HTTPException as http_ex:

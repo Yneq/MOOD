@@ -119,6 +119,10 @@ margin-left: 10px;
 }
 
 .title {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start; 
     color: rgba(68, 136, 153, 1);
     font-size: 30px;
     font-weight: bold;
@@ -652,6 +656,43 @@ a {
     background-color: rgba(255, 255, 255, 0.3);
 }
 
+.mood-icon {
+    width: 36px;
+    height: 24px;
+    background-image: url('mood-icon.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    margin-right: 8px;
+}
+
+.public-icon {
+    width: 24px;
+    height: 30px;
+    background-image: url('public-icon.png');
+    background-size: cover;
+    background-repeat: no-repeat;
+    margin-right: 8px;
+}
+
+.exchange-icon {
+    width: 30px;
+    height: 30px;
+    background-image: url('exchangeBtn.jpeg');
+    background-size: cover;
+    background-repeat: no-repeat;
+    margin-right: 8px;
+    border-radius: 50%;
+}
+  
+.diary-icon {
+    width: 30px;
+    height: 30px;
+    background-image: url('diary-icon.png');
+    background-size: cover;
+    background-repeat: no-repeat;
+    margin-right: 8px;
+    border-radius: 50%;
+}
 
 /**/
 
