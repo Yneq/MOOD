@@ -5,7 +5,8 @@ Journals unlock inner thoughts.
 ## Project Description
 
 Mood Exchange Diary is a platform that allows users to write and exchange diaries in real-time, fostering self-reflection and emotional support through shared experiences.
-<img width="973" alt="Screenshot 2024-08-27 at 5 27 54 AM" src="https://github.com/user-attachments/assets/7d9e970d-7ea5-40d0-b8ca-21b0f85c9769">
+<img width="1335" alt="Screenshot 2024-09-02 at 12 33 10 PM" src="https://github.com/user-attachments/assets/57f37141-2f59-4fbe-bfdd-7bab9519f53d">
+
 
 ## Key Features
 
@@ -101,6 +102,7 @@ Key Relationships:
 - User matches and match requests establish connections between users
 
 This schema design supports the core functionalities of our mood exchange diary application, including user interactions, diary management, mood tracking, and the matching system.
+
 <img width="546" alt="Screenshot 2024-08-27 at 4 51 11 AM" src="https://github.com/user-attachments/assets/dce95153-f104-4f1c-8831-680139fc8731">
 
 
