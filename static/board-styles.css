@@ -377,6 +377,10 @@ a {
     position: relative;
     box-sizing: border-box;
 }
+
+.success-self-info {
+    color: #20aea9;
+}
   
 .log-in {
     font-size: 24px;
