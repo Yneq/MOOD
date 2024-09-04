@@ -132,7 +132,7 @@ margin-left: 10px;
     cursor: pointer;
 }
 
-.title-moodsexchange {
+.title-moodsexchange, .title-moodsmymoods, .title-moodspublicmoods {
     color: rgba(68, 136, 153, 1);
     font-size: 20px;
     font-weight: bold;
@@ -646,6 +646,8 @@ box-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
     align-items: center;
     flex-direction: column;
     gap: 10px;
+    box-sizing: border-box;
+
 }
 
 #exchangeCountdown {
@@ -774,7 +776,7 @@ box-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
 /**/
 
 
-@media (max-width: 768px) {
+@media (max-width: 1100px) {
     .navbar, .nav-content, .main-content, footer {
         width: 100%;
         padding-left: 15px;
@@ -796,6 +798,7 @@ box-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
     .calendar-container {
         max-width: 768px;
         width: 100%;
+        box-sizing: border-box;
       }
 
     .diary-entry {
@@ -823,11 +826,12 @@ box-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
         justify-content: space-between;
     }
 
-    .title-moodsexchange {
-        font-size: 0; /* 隱藏文字 */
+    .title-moodsexchange,
+    .title-moodsmymoods,
+    .title-moodspublicmoods {
+        font-size: 0;
         width: 30px;
         height: 30px;
-        background-image: url('exchangeBtn.jpeg');
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
@@ -835,12 +839,24 @@ box-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
         box-shadow: 0 0 0 4px rgba(68, 136, 153, 1);
     }
 
-    .title-moodsexchange::before {
-        content: '';
-        display: block;
-        width: 100%;
-        height: 100%;
+    .title-moodsexchange span,
+    .title-moodsmymoods span,
+    .title-moodspublicmoods span {
+        display: none;
     }
+
+    .title-moodsmymoods {
+        background-image: url('diary-icon.png');
+    }
+
+    .title-moodsexchange {
+        background-image: url('exchangeBtn.jpeg');
+    }
+
+    .title-moodspublicmoods {
+        background-image: url('public-icon.png');
+    }
+    
 
     @media (max-width: 480px) {
         body {

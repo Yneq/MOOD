@@ -131,7 +131,9 @@ margin-left: 10px;
     cursor: pointer;
 }
 
-.title-moodsexchange {
+.title-moodsexchange,
+.title-moodsmymoods,
+.title-moodspublicmoods {
     color: rgba(68, 136, 153, 1);
     font-size: 20px;
     font-weight: bold;
@@ -242,6 +244,9 @@ button:hover {
     background: rgb(13 28 50 / 68%);
     backdrop-filter: blur(45px);
     border-radius: 15px;
+    width: 100%;
+    box-sizing: border-box;
+    
 }
 
 .message img {
@@ -567,7 +572,7 @@ a {
 
 
 /* 新增媒體查詢 */
-@media (max-width: 768px) {
+@media (max-width: 1100px) {
     .navbar, .nav-content, .main-content, footer {
         width: 100%;
         padding-left: 15px;
@@ -591,10 +596,6 @@ a {
         padding-right: 10px;
     }
 
-    .main-content {
-        padding: 15px;
-        margin-top: 10px;
-    }
 
     .title {
         font-size: 20px;
@@ -631,16 +632,35 @@ a {
         justify-content: space-between;
     }
 
-    .title-moodsexchange {
-        font-size: 0; /* 隱藏文字 */
+    .title-moodsexchange,
+    .title-moodsmymoods,
+    .title-moodspublicmoods {
+        font-size: 0;
         width: 30px;
         height: 30px;
-        background-image: url('exchangeBtn.jpeg');
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
         border-radius: 50%;
         box-shadow: 0 0 0 4px rgba(68, 136, 153, 1);
+    }
+
+    .title-moodsexchange span,
+    .title-moodsmymoods span,
+    .title-moodspublicmoods span {
+        display: none;
+    }
+
+    .title-moodsmymoods {
+        background-image: url('diary-icon.png');
+    }
+
+    .title-moodsexchange {
+        background-image: url('exchangeBtn.jpeg');
+    }
+
+    .title-moodspublicmoods {
+        background-image: url('public-icon.png');
     }
 }
 

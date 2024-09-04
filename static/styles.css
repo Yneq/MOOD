@@ -173,7 +173,7 @@ body {
   border-radius: 50%;
 }
 
-.title-moodsexchange {
+.title-moodsexchange, .title-moodsmymoods, .title-moodspublicmoods {
   color: rgba(68, 136, 153, 1);
   font-size: 20px;
   font-weight: bold;
@@ -187,8 +187,10 @@ body {
   height: 100%;
 }
 
-.title-moodsexchange:hover {
-  text-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
+.title-moodsexchange:hover,
+.title-moodsmymoods:hover,
+.title-moodspublicmoods:hover {
+    text-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
 }
 
 .buttons {
@@ -546,7 +548,7 @@ textarea {
   color: rgb(11, 164, 95);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1100px) {
 
   .diary-main-content {
       flex-direction: column;
@@ -572,10 +574,10 @@ textarea {
 
   .calendar-wall, .diary-container {
       width: 100%;
-      max-width: 768px;
+      max-width: 1100px;
   }
   .calendar-container {
-      max-width: 768px;
+      max-width: 1100px;
       width: 100%;
     }
 
@@ -604,27 +606,40 @@ textarea {
       justify-content: space-between;
   }
 
-  .title-moodsexchange {
-      font-size: 0; /* 隱藏文字 */
-      width: 30px;
-      height: 30px;
-      background-image: url('exchangeBtn.jpeg');
-      background-size: cover;
-      background-position: center;
-      background-repeat: no-repeat;
-      border-radius: 50%;
-      box-shadow: 0 0 0 4px rgba(68, 136, 153, 1);
+  .title-moodsexchange,
+  .title-moodsmymoods,
+  .title-moodspublicmoods {
+    font-size: 0;
+    width: 30px;
+    height: 30px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    border-radius: 50%;
+    box-shadow: 0 0 0 4px rgba(68, 136, 153, 1);
   }
 
-  .title-moodsexchange::before {
-      content: '';
-      display: block;
-      width: 100%;
-      height: 100%;
+  .title-moodsexchange span,
+  .title-moodsmymoods span,
+  .title-moodspublicmoods span {
+    display: none;
   }
+
+  .title-moodsmymoods {
+    background-image: url('diary-icon.png');
+  }
+
+  .title-moodsexchange {
+    background-image: url('exchangeBtn.jpeg');
+  }
+
+  .title-moodspublicmoods {
+    background-image: url('public-icon.png');
+  }
+
 }
 
-@media (max-width: 480px) {
+@media (max-width: 620px) {
     body {
         font-size: 15px;
     }
@@ -676,5 +691,8 @@ textarea {
         background-repeat: no-repeat;
         border-radius: 50%;
         box-shadow: 0 0 0 4px rgba(68, 136, 153, 1);
+    }
+    .introduction {
+      margin-top: 0;
     }
 }

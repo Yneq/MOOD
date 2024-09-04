@@ -37,9 +37,15 @@ class User:
         self.weather_counts: Dict[str, int] = {
                         'sunny': 0, 'cloudy': 0, 'rainy': 0, 'snowy': 0, 'windy': 0
         }
-        self.mood_score: float = 0.0
+        self.mood_scores: List[float] = []
+        self.avg_mood_score: float = 0.0
 
 
+    def calculate_avg_mood_score(self):
+        if self.mood_scores:
+            self.avg_mood_score = sum(self.mood_scores) / len(self.mood_scores)
+        else:
+            self.avg_mood_score = 0.0
 
     def calculate_posting_frequency(self):
         if not self.diary_entries:
@@ -66,7 +72,7 @@ async def daily_matching(db: mysql.connector.connection.MySQLConnection = Depend
         user_matches.partner_id,
         user_matches.match_date,
         COUNT(likes.user_id) as like_count,
-        AVG(mood_entries.mood_score) as avg_mood_score,
+        AVG(mood_entries.mood_score) as mood_score,
         SUM(CASE WHEN mood_entries.weather = 'sunny' THEN 1 ELSE 0 END) as sunny_count,
                SUM(CASE WHEN mood_entries.weather = 'cloudy' THEN 1 ELSE 0 END) as cloudy_count,
                SUM(CASE WHEN mood_entries.weather = 'rainy' THEN 1 ELSE 0 END) as rainy_count,
@@ -89,7 +95,11 @@ async def daily_matching(db: mysql.connector.connection.MySQLConnection = Depend
         user.last_matched = data.get('match_date')
         user.current_exchange_partner = data.get('partner_id')
         user.like_count = data.get('like_count') or 0
-        user.avg_mood_score = data.get('avg_mood_score') or 0
+
+        mood_scores_str = data.get('mood_scores', '')
+        user.mood_scores = [float(score) for score in mood_scores_str.split(',') if score]
+        user.calculate_avg_mood_score()
+        
         user.weather_counts = {
             'sunny': data.get('sunny_count') or 0,
             'cloudy': data.get('cloudy_count') or 0,
@@ -123,7 +133,7 @@ async def daily_matching(db: mysql.connector.connection.MySQLConnection = Depend
 
 def calculate_similarity(user1: User, user2: User, target_keyword: str=None) -> float:
     user1_keywords = user1.get_all_keywords()
-    user2_keywords = user1.get_all_keywords()
+    user2_keywords = user2.get_all_keywords()
     all_keywords = user1_keywords | user2_keywords
 
     # target_keyword = "olympic"

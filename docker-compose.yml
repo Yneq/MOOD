@@ -9,6 +9,8 @@ services:
       - ./static:/app/static
     depends_on:
       - redis
+    env_file:
+      - .env
 
   redis:
     image: "redis:alpine"

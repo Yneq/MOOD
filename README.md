@@ -1,11 +1,38 @@
 # Mood Exchange Diary
+<img width="1248" alt="Screenshot 2024-09-03 at 6 56 07 PM" src="https://github.com/user-attachments/assets/66630cb8-d659-41a5-b3e3-4a3eec6fe175">
 
-Journals unlock inner thoughts.
+<img width="1213" alt="Screenshot 2024-09-03 at 6 57 01 PM" src="https://github.com/user-attachments/assets/4acd07a2-6f4b-4ee8-a5bc-445cde31057b">
+
+<img width="1335" alt="Screenshot 2024-09-02 at 12 33 10 PM" src="https://github.com/user-attachments/assets/57f37141-2f59-4fbe-bfdd-7bab9519f53d">
+
+# Journals unlock inner thoughts.
+
+Table of Contents
+1. User Stories
+2. Project Description
+3. Key Features
+4. Tech Stack
+5. System Architecture
+6. Database Schema
+7. Key Algorithm: User Matching
+8. Unit Testing
+9. Installation and Setup
+10. Contributing
+11. License
+
+
+## User Stories
+
+- Exchange diaries with strangers
+- Gain fresh perspectives
+- Receive emotional support
+- Engage in self-reflection
+- Experience mental refreshment
+
 
 ## Project Description
 
 Mood Exchange Diary is a platform that allows users to write and exchange diaries in real-time, fostering self-reflection and emotional support through shared experiences.
-<img width="1335" alt="Screenshot 2024-09-02 at 12 33 10 PM" src="https://github.com/user-attachments/assets/57f37141-2f59-4fbe-bfdd-7bab9519f53d">
 
 
 ## Key Features
@@ -41,12 +68,12 @@ Mood Exchange Diary is a platform that allows users to write and exchange diarie
 - Amazon S3
 - AWS CloudFront
 - MySQL Connection Pool
-- redis-cache
-  
+- Redis-Cache
+
 ### Deployment
 - Docker
 - Nginx
-- AWS-Load Balance
+- AWS-Load Balancer
   
 ## System Architecture
 
@@ -118,15 +145,33 @@ The matching algorithm pairs users based on various factors:
 
 These factors are weighted to calculate an overall similarity score, which determines the best matches for diary exchanges.
 
-## User Stories
 
-- Exchange diaries with strangers
-- Gain fresh perspectives
-- Receive emotional support
-- Engage in self-reflection
-- Experience mental refreshment
+### Unit Testing
+This project implements a comprehensive unit testing strategy to ensure code quality and functional correctness. We use Python's pytest framework for testing.
+Test Coverage
+Our unit tests cover the following key components:
 
-## Installation and Setup
+Initialization and methods of the User class
+The calculate_similarity function
+Diary entry-related functionalities
+Matching algorithm
 
-https://vancenomad.life/
+Key Test Cases
+Here's an overview of some crucial test cases:
 
+1. test_user_init(): Validates the correct initialization of User objects.
+2. test_calculate_posting_frequency(): Checks the logic for calculating posting frequency.
+3. test_get_all_keywords(): Ensures correct keyword extraction from diary entries.
+4. test_calculate_similarity(): Tests the user similarity calculation functionality.
+5. test_calculate_similarity_with_target_keyword(): Verifies the impact of target keywords on similarity calculation.
+
+By maintaining and expanding our test suite, we are committed to ensuring the stability and reliability of the project.
+
+###Installation and Setup
+Visit https://vancenomad.life/ to use the application.
+
+### Contributing
+We welcome contributions of all forms! Please see our CONTRIBUTING.md file for more information on how to get started.
+
+###License
+This project is licensed under the MIT License. See the LICENSE file for details.
