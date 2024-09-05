@@ -395,6 +395,7 @@ const overlay = document.querySelector('.overlay');
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM fully loaded and parsed');
+    await updateUserDisplay();
 
     const token = localStorage.getItem('token');
     if (token) {
@@ -452,21 +453,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     
 
-function updateUserDisplay() {
-    const userName = localStorage.getItem('user_name');
-    if (userName && userAvatar) {
-        userAvatar.textContent = userName.charAt(0).toUpperCase();
-        userAvatar.style.display = 'flex';
-    }
-    if (loginBtn) {
-        loginBtn.textContent = isLoggedIn ? 'Sign out' : 'Sign in';
-        console.log('Button text updated:', loginBtn.textContent);
-    } else {
-        console.error('Login button not found');
-    }
-}
+// function updateUserDisplay() {
+//     const userName = localStorage.getItem('user_name');
+//     if (userName && userAvatar) {
+//         userAvatar.textContent = userName.charAt(0).toUpperCase();
+//         userAvatar.style.display = 'flex';
+//     }
+//     if (loginBtn) {
+//         loginBtn.textContent = isLoggedIn ? 'Sign out' : 'Sign in';
+//         console.log('Button text updated:', loginBtn.textContent);
+//     } else {
+//         console.error('Login button not found');
+//     }
+// }
 
-updateUserDisplay();
+// updateUserDisplay();
 
 // 登入按鈕事件
 if (loginBtn) {
@@ -481,22 +482,18 @@ if (loginBtn) {
 }
 
 
-
-function logout() {
+async function logout() {
     isLoggedIn = false;
-    localStorage.removeItem('token');
-    localStorage.removeItem('user_name');
-    localStorage.removeItem('email');
-    updateUserDisplay();
+    localStorage.clear();
+    await updateUserDisplay();
+    loadMessages();  // 重新加載留言
     if (userAvatar) {
         userAvatar.style.display = 'none';
-        overlay.style.display = 'none';
         }
+    overlay.style.display = 'none';
     console.log('Sign out');
-    // if (isBoardPage) {
-    //     window.location.href = '/static/index.html';
-    //     }
-    }
+
+}
 
 
 
@@ -579,8 +576,6 @@ function handleSignup() {
 function handleLogin() {
     const loginemailInput = document.querySelector('input[name="login-email"]');
     const loginpasswordInput = document.querySelector('input[name="login-password"]');
-    const failMessage = document.querySelector('.fail-email-password');
-    const successLoginMessage = document.querySelector('.success-login');
 
     if (loginemailInput && loginpasswordInput) {
         const email = loginemailInput.value;
@@ -592,11 +587,10 @@ function handleLogin() {
             body: JSON.stringify({ email, password })
         })
         .then(response => response.json())
-        .then(data => {
+        .then(async data => {
             if (data.error) {
-                showMessage(data.message, 'error' || 'Login failed, please try again later', 'error');
+                showMessage(data.message || 'Login failed, please try again later', 'error');
             } else if (data.token) {
-                //加入user_name, email
                 localStorage.setItem('token', data.token);
                 isLoggedIn = true;  // 立即更新登錄狀態
                 // 解析 token 並保存用戶信息
@@ -607,21 +601,17 @@ function handleLogin() {
                     }
                     if (tokenPayload.email) {
                         localStorage.setItem('email', tokenPayload.email);
-                       }
                     }
                     if (tokenPayload.id) {
                         localStorage.setItem('user_id', tokenPayload.id);
                     }
+                }
 
-                updateUserDisplay();
+                await updateUserDisplay();
+                loadMessages();  // 重新加載留言
                 showMessage('Sign in successfully', 'success');
                 setTimeout(() => {
                     closeModals();
-                    
-                     // 如果在 match 頁面,建立 WebSocket 連接
-                    if (window.location.pathname.includes('match.html')) {
-                        connectWebSocket();
-                    }
                 }, 2000);
             } else {
                 showMessage('Login failed, please try again later', 'error');
@@ -659,9 +649,6 @@ const avatarUpload = document.getElementById('avatar-upload');
 const avatarPreview = document.getElementById('avatar-preview');
 const changePasswordBtn = document.getElementById('change-password-btn');
 const passwordFields = document.getElementById('password-fields');
-
-
-const currentUserAvatar = loadUserAvatar();
 
     if (userAvatar && avatarPreview) {
         try {
@@ -716,7 +703,6 @@ async function loadUserAvatar(targetUserId = null) {
         const currentUserId = localStorage.getItem('user_id');
 
         if (!token || !currentUserId) {
-            // console.error('No token or user ID found');
             return;
         }
 
@@ -738,6 +724,11 @@ async function loadUserAvatar(targetUserId = null) {
         console.log('Received user data:', userData);
 
         if (userData && userData.avatar_url) {
+            const userAvatar = document.getElementById('userAvatar');
+            if (userAvatar) {
+                userAvatar.style.backgroundImage = `url('${userData.avatar_url}')`;
+                userAvatar.textContent = '';
+            }
             return userData.avatar_url;
         } else {
             console.log('No avatar URL found in the response');
@@ -959,16 +950,83 @@ function showMessage(message, type = 'info') {
     }, 2000);
 }
 
-function updateUserDisplay() {
-    const userName = localStorage.getItem('user_name');
-    if (userName && userAvatar) {
-        userAvatar.textContent = userName.charAt(0).toUpperCase();
-        userAvatar.style.display = 'flex';
+
+const selfIntroElement = document.getElementById('self-intro');
+const avatarPreview = document.getElementById('avatar-preview');
+
+async function updateUserDisplay() {
+    const isLoggedIn = !!localStorage.getItem('token');
+
+    if (!isLoggedIn) {
+        // 如果未登錄，清除所有用戶相關顯示
+        if (userAvatar) {
+            userAvatar.style.backgroundImage = '';
+            userAvatar.textContent = '';
+            userAvatar.style.display = 'none';
+        }
+        if (selfIntroElement) {
+            selfIntroElement.value = '';
+        }
+        if (avatarPreview) {
+            avatarPreview.style.backgroundImage = '';
+        }
+        if (loginBtn) {
+            loginBtn.textContent = 'Sign in';
+        }
+        localStorage.removeItem('avatarUrl');
+        return;
     }
-    if (loginBtn) {
-        loginBtn.textContent = isLoggedIn ? 'Sign out' : 'Sign in';
-    } else {
-        console.error('Login button not found');
+
+    try {
+        const response = await fetch('/get_user_profile', {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            
+            // 更新自我介紹
+            if (selfIntroElement) {
+                selfIntroElement.value = data.self_intro || '';
+                localStorage.setItem('selfIntro', data.self_intro || '');
+            }
+            
+            // 更新頭像
+            const avatarUrl = data.avatar_url;
+            localStorage.setItem('avatarUrl', avatarUrl || '');
+            if (userAvatar) {
+                if (avatarUrl) {
+                    userAvatar.style.backgroundImage = `url('${avatarUrl}')`;
+                    userAvatar.textContent = '';
+                    userAvatar.style.display = 'flex';
+                } else {
+                    const userName = localStorage.getItem('user_name');
+                    if (userName) {
+                        userAvatar.style.backgroundImage = '';
+                        userAvatar.textContent = userName.charAt(0).toUpperCase();
+                        userAvatar.style.display = 'flex';
+                    } else {
+                        userAvatar.style.backgroundImage = '';
+                        userAvatar.textContent = '';
+                        userAvatar.style.display = 'none';
+                    }
+                }
+            }
+            
+            if (avatarPreview) {
+                avatarPreview.style.backgroundImage = avatarUrl ? `url('${avatarUrl}')` : '';
+            }
+            
+            // 更新登錄按鈕
+            if (loginBtn) {
+                loginBtn.textContent = 'Sign out';
+            }
+        } else {
+            console.error('Failed to fetch user profile');
+        }
+    } catch (error) {
+        console.error('Error fetching user profile:', error);
     }
 }
 

@@ -251,8 +251,16 @@ button:hover {
 
 .message img {
     max-width: 100%;
+    height: auto;
     max-height: 300px;
-    margin-left: 50px;
+    object-fit: contain;
+    margin-left: 0; /* 移除左邊距 */
+    display: block; /* 讓圖片以塊級元素顯示 */
+    margin: 25px auto; /* 上下間距10px，左右自動居中 */
+
+    /* max-width: 100%;
+    max-height: 300px;
+    margin-left: 50px; */
 }
 
 
@@ -423,6 +431,7 @@ a {
     width: 100%;
     font-size: 19px;
     background-color: rgb(100 109 112);
+    margin-top: 10px;
     margin-bottom: 10px;
     border-radius: 5px;
     padding: 15px;
@@ -586,6 +595,12 @@ a {
         padding: 20px 15px;
         margin-top: 10px;
     }
+
+    .message p {
+        padding: 20px;
+    }
+
+
 
     body {
         font-size: 14px;
