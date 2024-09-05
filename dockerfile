@@ -13,7 +13,7 @@ COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
 # 確保 uvicorn 被正確安裝
-RUN pip3 install uvicorn
+RUN pip3 install uvicorn pydantic[email]
 
 # 將當前目錄的內容複製到容器中的/app
 COPY . .
