@@ -10,10 +10,7 @@ RUN apt-get update && apt-get install -y curl procps net-tools
 COPY requirements.txt .
 
 # 安裝 Python 依賴
-RUN pip install --no-cache-dir --upgrade mysql-connector-python
-
-# 確保 uvicorn 被正確安裝
-RUN pip3 install uvicorn pydantic[email]
+RUN pip install --no-cache-dir -r requirements.txt
 
 # 將當前目錄的內容複製到容器中的/app
 COPY . .
@@ -24,5 +21,5 @@ RUN mkdir -p /app/static/
 # 暴露端口
 EXPOSE 3001
 
-# 使用完整路徑運行 uvicorn
-CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "3001"]
+# 使用 uvicorn 運行應用
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "3001"]
