@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y curl procps net-tools
 COPY requirements.txt .
 
 # 安裝 Python 依賴
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade mysql-connector-python
 
 # 確保 uvicorn 被正確安裝
 RUN pip3 install uvicorn pydantic[email]
