@@ -10,11 +10,15 @@ services:
       - redis
     env_file:
       - .env
+    networks:
+      - app-network
 
   redis:
     image: "redis:alpine"
     ports:
       - "6380:6379"
+    networks:
+      - app-network
 
   nginx:
     image: nginx:alpine
@@ -26,3 +30,7 @@ services:
       - ./static:/app/static:ro
     depends_on:
       - app
+
+networks:
+  app-network:
+    driver: bridge
