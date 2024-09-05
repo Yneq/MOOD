@@ -3,7 +3,7 @@ services:
   app:
     build: .
     ports:
-      - "3000:3000"
+      - "3001:3001"
     volumes:
       - ./static:/app/static
     depends_on:
