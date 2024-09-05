@@ -10,3 +10,4 @@ pytz==2024.1
 redis==5.0.7
 reportlab==4.2.2
 uvicorn==0.25.0  # 使用與 FastAPI 0.112.2 兼容的版本
+websockets
