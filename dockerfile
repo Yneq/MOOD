@@ -25,4 +25,4 @@ RUN mkdir -p /app/static/
 EXPOSE 3001
 
 # 使用完整路徑運行 uvicorn
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3001"]
+CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "3001"]
