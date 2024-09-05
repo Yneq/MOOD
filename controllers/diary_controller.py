@@ -34,7 +34,7 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 
 
 
-redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+# redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
 # 設置日誌記錄
 import logging
