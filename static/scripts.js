@@ -1174,7 +1174,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 準備要發送的數據
 
         const moodData = {
-            mood_score: currentMoodScore !== undefined ? currentMoodScore : null,
+            mood_score: (currentMoodScore !== undefined && currentMoodScore >= 1 && currentMoodScore <= 5) ? currentMoodScore : null,
             date: selectedDate,
             weather: currentWeather || null,  // 如果未設置，使用 null
             note: content
