@@ -489,6 +489,13 @@ async def save_mood_entry(
     current_user: dict = Depends(get_current_user),
     db: mysql.connector.connection.MySQLConnection = Depends(get_db)
 ):
+    logger.debug(f"Received mood entry: {mood_entry.dict()}")
+
+     # 新增的驗證代碼
+    if mood_entry.mood_score is not None and (mood_entry.mood_score < 1 or mood_entry.mood_score > 5):
+        logger.warning(f"Invalid mood score received: {mood_entry.mood_score}")
+        raise HTTPException(status_code=400, detail="Mood score must be between 1 and 5")
+
     try:
         cursor = db.cursor(dictionary=True)
 
@@ -506,7 +513,7 @@ async def save_mood_entry(
             WHERE id = %s AND user_id = %s
             """
             cursor.execute(update_query, (
-                mood_entry.mood_score,
+                mood_entry.mood_score if mood_entry.mood_score is not None else None,
                 mood_entry.weather,
                 mood_entry.note,
                 existing_entry['id'],
@@ -520,7 +527,7 @@ async def save_mood_entry(
             """
             cursor.execute(insert_query, (
                 current_user["id"],
-                mood_entry.mood_score,
+                mood_entry.mood_score if mood_entry.mood_score is not None else None,
                 mood_entry.date,
                 mood_entry.weather or '',
                 mood_entry.note,

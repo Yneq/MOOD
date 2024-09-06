@@ -66,7 +66,7 @@ class DiaryEntryResponse(BaseModel):
         return v
 
 class MoodEntryRequest(BaseModel):
-    mood_score: Optional[int] = Field(None, ge=0, le=5)
+    mood_score: Optional[int] = Field(None, ge=1, le=5)
     date: date
     weather: Optional[str] = None
     note: Optional[str] = None
