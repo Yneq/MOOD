@@ -1,14 +1,3 @@
-
-// // 立即執行的登錄檢查
-// (function() {
-//     const isLoggedIn = !!localStorage.getItem('token');
-//     const isBoardPage = window.location.pathname.includes('board.html');
-    
-//     if (isBoardPage && !isLoggedIn) {
-//         window.location.href = '/static/index.html';
-//     }
-// })();
-
 let messages = [];
 let currentUserName = localStorage.getItem('user_name') || 'Anonymous';
 
@@ -223,7 +212,7 @@ async function toggleLike(messageId) {
 
 function getUserDisplayName(message) {
     if (message.email === localStorage.getItem('email')) {
-        return currentUserName;
+        return localStorage.getItem('user_name') || 'Anonymous';
     }
     // 否則使用消息中的 user_name 或 'Anonymous'
     return message.user_name || 'Anonymous';
