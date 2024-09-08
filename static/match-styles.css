@@ -855,62 +855,69 @@ box-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
 
     .title-moodspublicmoods {
         background-image: url('public-icon.png');
-    }
-    
+    }    
+}
 
-    @media (max-width: 480px) {
-        body {
-            font-size: 15px;
-        }
-    
-        .navbar, .nav-content, .main-content, footer {
-            padding-left: 5px;
-            padding-right: 5px;
-        }
-    
-        .title {
-            font-size: 18px;
-        }
-    
-        .title-moodsexchange {
-            font-size: 16px;
-        }
-    
-        .booking-btn {
-            font-size: 12px;
-            width: 60px;
-            height: 28px;
-        }
-    
-        textarea {
-            font-size: 15px;
-            height: 120px;
-        }
-    
-        button {
-            font-size: 12px;
-            padding: 6px 12px;
-        }
-    
-        .share-btn {
-            font-size: 14px;
-        }
-    
-        .nav-content {
-            justify-content: space-between;
-        }
-    
-        .title-moodsexchange {
-            font-size: 0; /* 隱藏文字 */
-            width: 30px;
-            height: 30px;
-            background-image: url('exchangeBtn.jpeg');
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            border-radius: 50%;
-            box-shadow: 0 0 0 4px rgba(68, 136, 153, 1);
-        }
+@media (max-width: 480px) {
+    body {
+        font-size: 15px;
     }
 
+    .navbar, .nav-content, .main-content, footer {
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+
+    .title {
+        font-size: 18px;
+    }
+
+    .title-moodsexchange {
+        font-size: 16px;
+    }
+
+    .booking-btn {
+        font-size: 12px;
+        width: 60px;
+        height: 28px;
+    }
+
+    .partner-name {
+        width: 2rem;
+        height: 2rem;
+        font-size: 0.75rem;
+        margin-left: 0.625rem;
+        border: 1px solid #ffffff;
+        box-shadow: 0 0 0 2px #007bfff7;
+    }
+
+    textarea {
+        font-size: 15px;
+        height: 120px;
+    }
+
+    button {
+        font-size: 12px;
+        padding: 6px 12px;
+    }
+
+    .share-btn {
+        font-size: 14px;
+    }
+
+    .nav-content {
+        justify-content: space-between;
+    }
+
+    .title-moodsexchange {
+        font-size: 0; /* 隱藏文字 */
+        width: 30px;
+        height: 30px;
+        background-image: url('exchangeBtn.jpeg');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        border-radius: 50%;
+        box-shadow: 0 0 0 4px rgba(68, 136, 153, 1);
+    }
 }

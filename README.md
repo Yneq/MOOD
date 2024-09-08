@@ -74,6 +74,7 @@ Mood Exchange Diary is a platform that allows users to write and exchange diarie
 - Docker
 - Nginx
 - AWS-Load Balancer
+- AWS-Auto Scaling
   
 ## System Architecture
 
@@ -137,13 +138,21 @@ This schema design supports the core functionalities of our mood exchange diary 
 
 The matching algorithm pairs users based on various factors:
 
-1. **Keyword Similarity**: Analyzes common keywords in users' diary entries.
-2. **Posting Frequency**: Compares how often users write entries.
-3. **Popularity**: Considers the number of likes users receive.
-4. **Weather Preferences**: Matches users based on their weather-related entries.
-5. **Mood Scores**: Pairs users with complementary mood patterns.
-
-These factors are weighted to calculate an overall similarity score, which determines the best matches for diary exchanges.
+Data Collection:
+- User diary entries, posting frequency, likes, weather preferences, mood scores
+- Similarity Calculation (calculate_similarity):
+   1. Keyword similarity in diary content
+   2. Posting frequency alignment
+   3. Like count balancing
+   4. Weather preference matching
+   5. Mood score complementation
+- Weighted Factors:
+  Carefully calibrated for comprehensive matching
+- Matching Process:
+  daily_matching function applies similarity algorithm for optimal pairing
+- Holistic Approach:
+  Considers writing habits, emotional states, and environmental preferences
+  Aims for meaningful diary exchange experiences
 
 
 ### Unit Testing

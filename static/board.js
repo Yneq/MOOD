@@ -903,7 +903,7 @@ if (profileForm) {
 }); //DOM 尾部=======================
 
 
-
+// TODO: 實現 WebSocket 連接後，在接收到新消息時調用此函數
 function handleNewMessage(message) {
 console.log("Handling new message:", message);
 if (!messages.some(m => m.id === message.id)) {
