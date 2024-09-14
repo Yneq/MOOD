@@ -50,10 +50,18 @@ app.include_router(match_controller.router)
 # 全局異常處理器
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Global exception: {str(exc)}")
-    logger.error(traceback.format_exc())
-    return JSONResponse(
-        status_code=500,
-        content={"message": "An unexpected error occurred", "detail": str(exc)},
-    )
+    if isinstance(exc, HTTPException):
+        # 對於 HTTPException，保留原始狀態碼和詳細信息
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"message": exc.detail},
+        )
+    else:
+        # 對於其他類型的異常，記錄詳細信息並返回 500 錯誤
+        logger.error(f"Global exception: {str(exc)}")
+        logger.error(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"message": "An unexpected error occurred"},
+        )
     

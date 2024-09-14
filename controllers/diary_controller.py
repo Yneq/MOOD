@@ -34,7 +34,7 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 
 
 
-redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
+redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
 # 設置日誌記錄
 import logging
@@ -51,24 +51,7 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
-
-# # 設置時區
-# taipei_tz = pytz.timezone('Asia/Taipei')
-
-# def convert_to_taipei_time(dt):
-#     if not dt.tzinfo:
-#         dt = pytz.UTC.localize(dt)
-#     return dt.astimezone(taipei_tz)
-
-# def convert_date_to_isoformat(date_value):
-#     if isinstance(date_value, datetime):
-#         return convert_to_taipei_time(date_value).date().isoformat()
-#     elif isinstance(date_value, date):
-#         return date_value.isoformat()
-#     return str(date_value)
-
-
-@router.get("/get_diary_entries", response_model=List[DiaryEntryResponse])
+@router.get("/api/v1/diary_entries", response_model=List[DiaryEntryResponse])
 async def get_diary_entries(
     skip: int = 0,
     limit: int = 100,
@@ -121,8 +104,112 @@ async def get_diary_entries(
         if cursor:
             cursor.close()
 
+@router.get("/api/v1/diary_entries/export")
+async def download_moods(
+    format: str = Query(..., regex="^(json|csv|pdf)$"),
+    current_user: dict = Depends(get_current_user),
+    db: mysql.connector.connection.MySQLConnection = Depends(get_db)
+):
+    try:
+        cursor = db.cursor(dictionary=True)
+        query = "SELECT * FROM diary_entries WHERE user_id = %s ORDER BY date DESC"
+        cursor.execute(query, (current_user["id"],))
+        entries = cursor.fetchall()
 
-@router.get("/get_diary_entry/{param}", response_model=Union[List[DiaryEntryResponse], DiaryEntryResponse])
+        for entry in entries:
+            entry['date'] = entry['date'].isoformat()
+            entry['created_at'] = entry['created_at'].isoformat()
+            entry['updated_at'] = entry['updated_at'].isoformat()
+
+        if format == 'json':
+            return create_json_response(entries)
+        elif format == 'csv':
+            return create_csv_response(entries)
+        elif format == 'pdf':
+            return await create_pdf_response(entries)
+
+    except mysql.connector.Error as e:
+        raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
+    finally:
+        cursor.close()
+
+def create_json_response(entries):
+    json_data = json.dumps(entries, ensure_ascii=False, indent=2)
+    return StreamingResponse(
+        io.StringIO(json_data),
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=my_moods.json"}
+    )
+
+def create_csv_response(entries):
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=entries[0].keys())
+    writer.writeheader()
+    for entry in entries:
+        writer.writerow(entry)
+    output.seek(0)
+    return StreamingResponse(
+        io.StringIO(output.getvalue()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=my_moods.csv"}
+    )
+
+async def create_pdf_response(entries):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    elements = []
+
+    # 註冊 CID 字體
+    pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+
+    styles = getSampleStyleSheet()
+    # 修改 Chinese 樣式使用 CID 字體
+    styles.add(ParagraphStyle(name='Chinese', fontName='STSong-Light', fontSize=12))
+
+    title = Paragraph("My Mood Diary", styles['Title'])
+    elements.append(title)
+
+    data = [['Date', 'Content']]
+    for entry in entries:
+        data.append([
+            entry['date'],
+            Paragraph(entry['content'], styles['Chinese'])
+        ])
+
+    page_width = letter[0]
+    col_widths = [page_width * 0.25, page_width * 0.75]  # 25% 給日期，75% 給內容
+
+    table = Table(data, colWidths=col_widths)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),  # 改為左對齊
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 14),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 1), (-1, -1), 'STSong-Light'),  # 使用 CID 字體
+        ('FONTSIZE', (0, 1), (-1, -1), 12),
+        ('TOPPADDING', (0, 1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # 垂直對齊頂部
+        ('WORDWRAP', (0, 0), (-1, -1), True),  # 自動換行
+    ]))
+    elements.append(table)
+
+    doc.build(elements)
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=my_moods.pdf"}
+    )
+
+
+@router.get("/api/v1/diary_entries/{param}", response_model=Union[List[DiaryEntryResponse], DiaryEntryResponse])
 async def get_diary_entry(
     param: str,
     current_user: Dict = Depends(get_current_user),
@@ -281,7 +368,7 @@ async def clear_diary_cache(user_id: int, date: str):
     await redis_client.delete(cache_key)
 
 
-@router.post("/create_diary_entry", response_model=DiaryEntryResponse)
+@router.post("/api/v1/diary_entries", response_model=DiaryEntryResponse)
 async def create_diary_entry(
     entry: DiaryEntryRequest,
     current_user: Dict = Depends(get_current_user),
@@ -352,7 +439,7 @@ async def create_diary_entry(
         if cursor:
             cursor.close()
 
-@router.put("/update_diary_entry/{entry_id}", response_model=DiaryEntryResponse)
+@router.put("/api/v1/diary_entries/{entry_id}", response_model=DiaryEntryResponse)
 async def update_diary_entry(
     entry_id: int,
     entry: DiaryEntryRequest,
@@ -432,7 +519,7 @@ async def update_diary_entry(
         if cursor:
             cursor.close()
 
-@router.delete("/delete_diary_entry/{entry_id}", response_model=Dict[str, str])
+@router.delete("/api/v1/diary_entries/{entry_id}", response_model=Dict[str, str])
 async def delete_diary_entry(
     entry_id: int,
     current_user: Dict = Depends(get_current_user),
@@ -483,7 +570,7 @@ async def delete_diary_entry(
         if cursor:
             cursor.close()
 
-@router.post("/save_mood_entry", response_model=MoodEntryResponse)
+@router.post("/api/v1/mood_entries", response_model=MoodEntryResponse)
 async def save_mood_entry(
     mood_entry: MoodEntryRequest,
     current_user: dict = Depends(get_current_user),
@@ -567,7 +654,7 @@ async def save_mood_entry(
 
 
 
-@router.post("/update_profile")
+@router.patch("/api/v1/users/profile")
 async def update_profile(
     request: ProfileUpdateRequest,
     current_user: dict = Depends(get_current_user),
@@ -590,15 +677,18 @@ async def update_profile(
 
         if request.new_password and request.new_password.strip():
             if not request.current_password:
+                logger.warning(f"Attempt to change password without providing current password for user {current_user['id']}")                
                 raise HTTPException(status_code=400, detail="當前密碼必須提供")
 
             cursor.execute("SELECT password FROM users WHERE id = %s", (current_user['id'],))
             user = cursor.fetchone()
             if not user:
+                logger.error(f"User not found in database: {current_user['id']}")
                 raise HTTPException(status_code=404, detail="用戶不存在")
             
             if request.current_password != user['password']:
-                raise HTTPException(status_code=400, detail="當前密碼不正確")
+                logger.warning(f"Incorrect current password provided for user {current_user['id']}")
+                raise HTTPException(status_code=400, detail="Current password not match!")
             
             update_fields.append("password = %s")
             update_values.append(request.new_password)
@@ -641,7 +731,8 @@ async def update_profile(
         logger.error(f"Database error for user {current_user['id']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"資料庫錯誤: {str(e)}")
     except HTTPException as he:
-        raise he
+        logger.warning(f"HTTP exception in update_profile: {he.detail}")
+        return JSONResponse(status_code=he.status_code, content={"message": he.detail})        
     except Exception as e:
         logger.error(f"Unexpected error for user {current_user['id']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"發生意外錯誤: {str(e)}")
@@ -649,7 +740,8 @@ async def update_profile(
         if cursor:
             cursor.close()
 
-@router.get("/get_user_avatar/{user_id}")
+
+@router.get("/api/v1/users/{user_id}/avatar")
 async def get_user_avatar(
     user_id: int,
     current_user: dict = Depends(get_current_user),
@@ -679,111 +771,9 @@ async def get_user_avatar(
     finally:
         cursor.close()
 
-@router.get("/download_moods/{format}")
-async def download_moods(
-    format: str,
-    current_user: dict = Depends(get_current_user),
-    db: mysql.connector.connection.MySQLConnection = Depends(get_db)
-):
-    try:
-        cursor = db.cursor(dictionary=True)
-        query = "SELECT * FROM diary_entries WHERE user_id = %s ORDER BY date DESC"
-        cursor.execute(query, (current_user["id"],))
-        entries = cursor.fetchall()
 
-        for entry in entries:
-            entry['date'] = entry['date'].isoformat()
-            entry['created_at'] = entry['created_at'].isoformat()
-            entry['updated_at'] = entry['updated_at'].isoformat()
 
-        if format == 'json':
-            return create_json_response(entries)
-        elif format == 'csv':
-            return create_csv_response(entries)
-        elif format == 'pdf':
-            return await create_pdf_response(entries)
-
-    except mysql.connector.Error as e:
-        raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
-    finally:
-        cursor.close()
-
-def create_json_response(entries):
-    json_data = json.dumps(entries, ensure_ascii=False, indent=2)
-    return StreamingResponse(
-        io.StringIO(json_data),
-        media_type="application/json",
-        headers={"Content-Disposition": "attachment; filename=my_moods.json"}
-    )
-
-def create_csv_response(entries):
-    output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=entries[0].keys())
-    writer.writeheader()
-    for entry in entries:
-        writer.writerow(entry)
-    output.seek(0)
-    return StreamingResponse(
-        io.StringIO(output.getvalue()),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=my_moods.csv"}
-    )
-
-async def create_pdf_response(entries):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
-    elements = []
-
-    # 註冊 CID 字體
-    pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
-
-    styles = getSampleStyleSheet()
-    # 修改 Chinese 樣式使用 CID 字體
-    styles.add(ParagraphStyle(name='Chinese', fontName='STSong-Light', fontSize=12))
-
-    title = Paragraph("My Mood Diary", styles['Title'])
-    elements.append(title)
-
-    data = [['Date', 'Content']]
-    for entry in entries:
-        data.append([
-            entry['date'],
-            Paragraph(entry['content'], styles['Chinese'])
-        ])
-
-    page_width = letter[0]
-    col_widths = [page_width * 0.25, page_width * 0.75]  # 25% 給日期，75% 給內容
-
-    table = Table(data, colWidths=col_widths)
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),  # 改為左對齊
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 14),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 1), (-1, -1), 'STSong-Light'),  # 使用 CID 字體
-        ('FONTSIZE', (0, 1), (-1, -1), 12),
-        ('TOPPADDING', (0, 1), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # 垂直對齊頂部
-        ('WORDWRAP', (0, 0), (-1, -1), True),  # 自動換行
-    ]))
-    elements.append(table)
-
-    doc.build(elements)
-    buffer.seek(0)
-    return StreamingResponse(
-        buffer,
-        media_type="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=my_moods.pdf"}
-    )
-
-@router.get("/get_user_profile")
+@router.get("/api/v1/users/profile")
 async def get_user_profile(
     current_user: dict = Depends(get_current_user),
     db: mysql.connector.connection.MySQLConnection = Depends(get_db)

@@ -532,7 +532,7 @@ async function updateUserDisplay() {
     }
 
     try {
-        const response = await fetch('/get_user_profile', {
+        const response = await fetch('/api/v1/users/profile', {
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
@@ -587,8 +587,8 @@ async function updateUserDisplay() {
 async function saveSelfIntro() {
     const selfIntro = selfIntroElement.value;
     try {
-        const response = await fetch('/update_profile', {
-            method: 'POST',
+        const response = await fetch('/api/v1/users/profile', {
+            method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -620,7 +620,7 @@ async function loadUserAvatar(targetUserId = null) {
         }
 
         const userId = targetUserId || currentUserId;
-        const url = `/get_user_avatar/${userId}`
+        const url = `/api/v1/users/${userId}/avatar`
 
         const response = await fetch(url, {
             method: 'GET',
@@ -1044,7 +1044,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return;
                 }
 
-                fetch (`/download_moods/${format}`, {
+                fetch(`/api/v1/diary_entries/export?format=${format}`, {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${token}` }
                 })
@@ -1190,7 +1190,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 保存心情數據
         
-        fetch('/save_mood_entry', {
+        fetch('/api/v1/mood_entries', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -1207,7 +1207,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         .then(moodResponse => {
             console.log('Mood data saved successfully:', moodResponse);        
 
-            const url = currentEntryId ? `/update_diary_entry/${currentEntryId}` : '/create_diary_entry';
+            const url = currentEntryId ? `/api/v1/diary_entries/${currentEntryId}` : '/api/v1/diary_entries';
             const method = currentEntryId ? 'PUT' : 'POST';
     
         // saveDiaryBtn.disabled = true;
@@ -1382,7 +1382,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     
         let param = entryId ? entryId : getFormattedDate(date);
-        let url = `/get_diary_entry/${param}`;
+        let url = `/api/v1/diary_entries/${param}`;
     
         fetch(url, {
             headers: {
@@ -1470,7 +1470,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         console.log('Fetching mood data for date:', date);  // 新增
 
-        fetch(`/get_diary_entry/${date}`, {
+        fetch(`/api/v1/diary_entries/${date}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -1628,7 +1628,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
     
-        fetch('/get_diary_entries', {
+        fetch('/api/v1/diary_entries', {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -1670,7 +1670,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        fetch('/get_diary_entries', {
+        fetch('/api/v1/diary_entries', {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -1742,7 +1742,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 console.log('Sending delete request for entry ID:', entryId);
 
-                const response = await fetch(`/delete_diary_entry/${entryId}`, {
+                const response = await fetch(`/api/v1/diary_entries/${entryId}`, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -1953,22 +1953,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         const formData = new FormData(this);
         formData.delete('self_intro');  //存localstorage，不發送後端
         
+        let requestBody = {
+            self_intro: selfIntro
+        };
 
-        if (!currentPassword && !newPassword && !confirmPassword) {
-            formData.delete('current-password');
-            formData.delete('new-password');
-            formData.delete('confirm-password');
-        } else if (newPassword !== confirmPassword) {
-            showMessage(document.querySelector('.fail-self-info'), 'New passwords do not match');
-            return;
+        if (newPassword || confirmPassword) {
+            // 確保新密碼與確認密碼匹配
+            if (newPassword !== confirmPassword) {
+                showMessage(document.querySelector('.fail-self-info'), 'The new password and confirmation password do not match.');
+                submitButton.disabled = false;
+                return;
+            }
+            // 確保提供了當前密碼
+            if (!currentPassword) {
+                showMessage(document.querySelector('.fail-self-info'), 'Please provide the current password to change the password.');
+                submitButton.disabled = false;
+                return;
+            }
+            // 添加密碼相關欄位到請求體
+            requestBody.current_password = currentPassword;
+            requestBody.new_password = newPassword;
         }
-        
 
         let avatarUrl = '';
         if (avatarFile) {
             try {
                 // 獲取預簽名 URL
-                const presignedUrlResponse = await fetch('/get_presigned_url', {
+                const presignedUrlResponse = await fetch('/api/v1/presigned_urls', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1996,6 +2007,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         try {
+
             const token = localStorage.getItem('token');
 
             if (!token) {
@@ -2003,32 +2015,49 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            const response = await fetch('/update_profile', {
-                method: 'POST',
-                body: JSON.stringify({
-                    current_password: currentPassword,
-                    new_password: newPassword,
-                    avatar_url: avatarUrl,
-                    self_intro: selfIntro  // 添加 self_intro 到發送的數據中
-                }),
+            const requestBody = {
+                self_intro: selfIntro
+            };
+
+            if (avatarUrl) {
+                requestBody.avatar_url = avatarUrl;
+            }
+
+            if (newPassword) {
+                requestBody.current_password = currentPassword;
+                requestBody.new_password = newPassword;
+            }
+
+
+            const response = await fetch('/api/v1/users/profile', {
+                method: 'PATCH',
+                body: JSON.stringify(requestBody),
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 }
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
             const result = await response.json();
+            
+            if (!response.ok) {
+                console.error('Update failed:', result.message);
+                showMessage(document.querySelector('.fail-self-info'), result.message || 'Update profile failed');
+
+                if (result.message.includes("password")) {
+                    document.getElementById('current-password').value = '';
+                    document.getElementById('new-password').value = '';
+                    document.getElementById('confirm-password').value = '';
+                }                
+                return;
+            }
             
             if (result.success) {
                 console.log('Update successful, received result:', result);
 
                 localStorage.setItem('selfIntro', selfIntro);
-
                 showMessage(document.querySelector('.success-self-info'), 'Update profile successfully');
+
                 if (result.avatar_url) {
                     console.log('Attempting to update avatar with URL:', result.avatar_url);
                     const userAvatar = document.getElementById('userAvatar');
@@ -2044,7 +2073,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } else {
                     console.log('No avatar_url in the result');
                 }
-                localStorage.setItem('selfIntro', selfIntro);
+                // localStorage.setItem('selfIntro', selfIntro);
             } else {
                 console.error('Update failed:', result.message);
                 showMessage(document.querySelector('.fail-self-info'), result.message || 'Update profile failed');
@@ -2052,7 +2081,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         } catch (error) {
             console.error('Error updating profile:', error);
-            showMessage(document.querySelector('.fail-self-info'), 'Update profile failed');
+            showMessage(document.querySelector('.fail-self-info'), error.message || 'Update profile failed');
         } finally {
             submitButton.disabled = false;
         }

@@ -17,9 +17,9 @@ Table of Contents
 7. Key Algorithm: User Matching
 8. Unit Testing
 9. Installation and Setup
-10. Contributing
-11. License
-
+10. API Documentation
+11. Contributing
+12. License
 
 ## User Stories
 
@@ -48,7 +48,7 @@ Mood Exchange Diary is a platform that allows users to write and exchange diarie
 
 ### Backend
 - Python
-- FastAPI
+- FastAPI (with RESTful API)
 - MySQL
 - MVC-style architecture
 
@@ -77,13 +77,12 @@ Mood Exchange Diary is a platform that allows users to write and exchange diarie
 - AWS-Auto Scaling
   
 ## System Architecture
-
 1. **Client**: Users access the system through various devices (mobile, tablet, desktop).
 2. **Domain Resolution**: AWS Route 53 for routing user requests.
 3. **Load Balancing**: AWS Load Balancer distributes traffic across multiple Amazon EC2 instances.
 4. **Application Layer**: 
    - Nginx as a reverse proxy server on Amazon EC2 instances
-   - Backend services written in Python
+   - Backend services written in Python with FastAPI, providing RESTful APIs for user authentication, diary management, and mood tracking
    - WebSocket support for real-time bidirectional communication
    - Containerized with Docker for easy deployment and scaling
 5. **Database**: AWS RDS (MySQL) for data storage
@@ -176,8 +175,12 @@ Here's an overview of some crucial test cases:
 
 By maintaining and expanding our test suite, we are committed to ensuring the stability and reliability of the project.
 
-###Installation and Setup
+### Installation and Setup
 Visit https://vancenomad.life/ to use the application.
+
+### API Documentation
+Our application provides a comprehensive set of RESTful APIs for user authentication, diary management, mood tracking, and user matching. To explore the available API routes, visit the following documentation:
+Visit https://vancenomad.life/docs
 
 ### Contributing
 We welcome contributions of all forms! Please see our CONTRIBUTING.md file for more information on how to get started.

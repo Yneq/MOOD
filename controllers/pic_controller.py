@@ -43,7 +43,7 @@ db_config = {
     "database": os.getenv("RDS_MOOD")
 }
 
-@router.post("/get_presigned_url")
+@router.post("/api/v1/presigned_urls")
 async def get_presigned_url(request: PresigneUrlRequest):
     try:
         file_key = str(uuid.uuid4()) + "_" + request.filename
@@ -58,7 +58,7 @@ async def get_presigned_url(request: PresigneUrlRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/save_message")
+@router.post("/api/v1/messages")
 async def save_message(request: MessageRequest, current_user: dict = Depends(get_current_user)):
     try:
         logger.info(f"Received message request: {request}")
@@ -111,7 +111,7 @@ async def save_message(request: MessageRequest, current_user: dict = Depends(get
         logger.error(f"Unexpected error in save_message: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
-@router.delete("/delete_message/{message_id}")
+@router.delete("/api/v1/messages/{message_id}")
 async def delete_message(message_id: int, current_user: Dict = Depends(get_current_user)):
     try:
         conn = mysql.connector.connect(**db_config)
@@ -145,7 +145,7 @@ async def delete_message(message_id: int, current_user: Dict = Depends(get_curre
             conn.close()
 
 
-@router.get('/get_messages')
+@router.get('/api/v1/messages')
 async def get_messages(current_user_id: int = None):
     try:
         conn = mysql.connector.connect(**db_config)
@@ -192,7 +192,7 @@ async def get_messages(current_user_id: int = None):
             conn.close()
 
 
-@router.post("/toggle_like/{message_id}")
+@router.post("/api/v1/messages/{message_id}/likes")
 async def toggle_like(message_id: int, current_user: Dict = Depends(get_current_user)):
     try:
         conn = mysql.connector.connect(**db_config)

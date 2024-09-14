@@ -7,7 +7,7 @@ async function loadMessages(userId = null) {
             'Content-Type': 'application/json',
         };
 
-        let url = '/get_messages';
+        let url = '/api/v1/messages';
         if (userId !== null) {
             url += `?current_user_id=${userId}`;
         }
@@ -157,7 +157,7 @@ async function toggleLike(messageId) {
             showLoginModal();
             return
         }
-        const response = await fetch(`/toggle_like/${messageId}`, {
+        const response = await fetch(`/api/v1/messages/${messageId}/likes`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -252,7 +252,7 @@ document.getElementById('postForm').addEventListener('submit', async function(e)
     if (imageFile) {
         try {
             // 獲取預簽名 URL
-            const presignedUrlResponse = await fetch('/get_presigned_url', {
+            const presignedUrlResponse = await fetch('/api/v1/presigned_urls', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -288,7 +288,7 @@ document.getElementById('postForm').addEventListener('submit', async function(e)
             return
         }
 
-        const response = await fetch('/save_message', {
+        const response = await fetch('/api/v1/messages', {
             method: 'POST',
             body: JSON.stringify({ text, imageUrl }),
             headers: {
@@ -338,7 +338,7 @@ async function deleteMessage(messageId) {
     }
     try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`/delete_message/${messageId}`, {
+        const response = await fetch(`/api/v1/messages/${messageId}`, {
             method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json',
@@ -696,7 +696,7 @@ async function loadUserAvatar(targetUserId = null) {
         }
 
         const userId = targetUserId || currentUserId;
-        const url = `/get_user_avatar/${userId}`
+        const url = `/api/v1/users/${userId}/avatar`
 
         const response = await fetch(url, {
             method: 'GET',
@@ -795,26 +795,39 @@ if (profileForm) {
     const newPassword = document.getElementById('new-password').value;
     const confirmPassword = document.getElementById('confirm-password').value;
     const avatarFile = document.getElementById('avatar-upload').files[0];
+    const selfIntro = document.getElementById('self-intro').value;  // 獲取 self-intro 的值
+
     
     const formData = new FormData(this);
     formData.delete('self_intro');  //存localstorage，不發送後端
     
+    let requestBody = {
+        self_intro: selfIntro
+    };
 
-    if (!currentPassword && !newPassword && !confirmPassword) {
-        formData.delete('current-password');
-        formData.delete('new-password');
-        formData.delete('confirm-password');
-    } else if (newPassword !== confirmPassword) {
-        showMessage( 'New passwords do not match', 'error');
-        return;
+    if (newPassword || confirmPassword) {
+        // 確保新密碼與確認密碼匹配
+        if (newPassword !== confirmPassword) {
+            showMessage('The new password and confirmation password do not match.', 'error');
+            submitButton.disabled = false;
+            return;
+        }
+        // 確保提供了當前密碼
+        if (!currentPassword) {
+            showMessage('Please provide the current password to change the password.', 'error');
+            submitButton.disabled = false;
+            return;
+        }
+        // 添加密碼相關欄位到請求體
+        requestBody.current_password = currentPassword;
+        requestBody.new_password = newPassword;
     }
-    
 
     let avatarUrl = '';
     if (avatarFile) {
         try {
             // 獲取預簽名 URL
-            const presignedUrlResponse = await fetch('/get_presigned_url', {
+            const presignedUrlResponse = await fetch('/api/v1/presigned_urls', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -835,48 +848,70 @@ if (profileForm) {
             avatarUrl = cloudfront_url;
         } catch (error) {
             console.error('Error uploading avatar:', error);
-            showMessage('Upload avatar failed', 'error');
+            showMessage( 'Upload avatar failed', 'error');
             submitButton.disabled = false;
             return;
         }
     }
 
     try {
+
         const token = localStorage.getItem('token');
 
         if (!token) {
-            showMessage('Please sign-in first', 'error');
+            showMessage('Please signin first', 'error');
             return;
         }
 
-        const response = await fetch('/update_profile', {
-            method: 'POST',
-            body: JSON.stringify({
-                current_password: currentPassword,
-                new_password: newPassword,
-                avatar_url: avatarUrl
-            }),
+        const requestBody = {
+            self_intro: selfIntro
+        };
+
+        if (avatarUrl) {
+            requestBody.avatar_url = avatarUrl;
+        }
+
+        if (newPassword) {
+            requestBody.current_password = currentPassword;
+            requestBody.new_password = newPassword;
+        }
+
+
+        const response = await fetch('/api/v1/users/profile', {
+            method: 'PATCH',
+            body: JSON.stringify(requestBody),
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             }
         });
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
         const result = await response.json();
+        
+        if (!response.ok) {
+            console.error('Update failed:', result.message);
+            showMessage((result.message || 'Update profile failed'), 'error');
+
+            if (result.message.includes("password")) {
+                document.getElementById('current-password').value = '';
+                document.getElementById('new-password').value = '';
+                document.getElementById('confirm-password').value = '';
+            }                
+            return;
+        }
         
         if (result.success) {
             console.log('Update successful, received result:', result);
 
+            localStorage.setItem('selfIntro', selfIntro);
             showMessage('Update profile successfully', 'success');
+
             if (result.avatar_url) {
                 console.log('Attempting to update avatar with URL:', result.avatar_url);
                 const userAvatar = document.getElementById('userAvatar');
                 const avatarPreview = document.getElementById('avatar-preview');
                 if (userAvatar) {
+                    userAvatar.style.backgroundImage = '';
                     userAvatar.style.backgroundImage = `url('${result.avatar_url}')`;
                     avatarPreview.style.backgroundImage = `url('${result.avatar_url}')`;
                     
@@ -886,14 +921,15 @@ if (profileForm) {
             } else {
                 console.log('No avatar_url in the result');
             }
+            // localStorage.setItem('selfIntro', selfIntro);
         } else {
             console.error('Update failed:', result.message);
-            showMessage(result.message, 'error' || 'Update profile failed', 'error');
+            showMessage((result.message || 'Update profile failed'), 'error');
         }
 
     } catch (error) {
         console.error('Error updating profile:', error);
-        showMessage('Update profile failed', 'error');
+        showMessage((error.message || 'Update profile failed'), 'error');
     } finally {
         submitButton.disabled = false;
     }
@@ -967,7 +1003,7 @@ async function updateUserDisplay() {
     }
 
     try {
-        const response = await fetch('/get_user_profile', {
+        const response = await fetch('/api/v1/users/profile', {
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
