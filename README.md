@@ -19,7 +19,6 @@ Table of Contents
 9. Installation and Setup
 10. API Documentation
 11. Contributing
-12. License
 
 ## User Stories
 
