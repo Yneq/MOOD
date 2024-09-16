@@ -53,7 +53,7 @@ Mood Exchange Diary is a platform that allows users to write and exchange diarie
 
 ### Frontend
 - HTML
-- CSS
+- CSS (with media queries for RWD)
 - JavaScript
 
 ### Authentication
