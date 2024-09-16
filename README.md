@@ -179,8 +179,9 @@ By maintaining and expanding our test suite, we are committed to ensuring the st
 Visit https://vancenomad.life/ to use the application.
 
 ### API Documentation
-Our application provides a comprehensive set of RESTful APIs for user authentication, diary management, mood tracking, and user matching. To explore the available API routes, visit the following documentation:
-Visit https://vancenomad.life/docs
+Our application provides a set of RESTful APIs for attraction search, booking management, and payment processing. To explore the available API routes, you can access our API documentation in the following way:
+Visit our API documentation page at:
+https://vancenomad.life/docs
 
 ### Contributing
 We welcome contributions of all forms! Please see our CONTRIBUTING.md file for more information on how to get started.
