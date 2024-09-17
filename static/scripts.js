@@ -19,7 +19,6 @@ let lastDeleteTime = 0;
 
 function initializeMatchPage() {
     const exchangeBtn = document.getElementById('exchangeBtn');
-    console.log('Initializing match page');
     if (exchangeBtn) {
         if (localStorage.getItem('token') && localStorage.getItem('user_id')) {
             connectWebSocket();
@@ -33,7 +32,6 @@ function initializeMatchPage() {
 
 async function handleExchangeRequest() {
     if (isExchangeButtonDisabled) {
-        console.log('Exchange button is already disabled');
         return;
     }
     try {
@@ -78,12 +76,8 @@ async function handleExchangeRequest() {
 
         checkMatchStatus(); // 在所有情況下都檢查匹配狀態
     } catch (error) {
-        console.error('Error:', error);
-        if (error.response) {
-            console.error('Error response:', await error.response.text());
-        }        
         showNotification('An error occurred. Please try again later.');
-        enableExchangeButton(exchangeBtn); // 如果發生錯誤，重新啟用按鈕
+        enableExchangeButton(exchangeBtn);
     }
 }
 
@@ -101,7 +95,6 @@ async function checkMatchStatus() {
         );
 
         const data = await response.json();
-        console.log('Match status response:', data);
         
         updateExchangeButton(data);
 
@@ -112,7 +105,6 @@ async function checkMatchStatus() {
         switch(data.status) {
             case 'accepted':
                 // 檢查配對是否在24小時內
-                console.log(`Match accepted with partner Name: ${data.partner_name}`);
                 if (currentPartnerId !== data.partner_id) {
                     currentPartnerId = data.partner_id;
                     showNotification(`You've been matched with ${data.partner_name}!`);
@@ -149,7 +141,6 @@ async function checkMatchStatus() {
                 break;
             case 'pending':
             case 'incoming_request':
-                console.log(`Pending request: ${data.message}`);
                 if (partnerDiaryContent) {
                     if (data.status === 'pending') {
                         partnerDiaryContent.innerHTML = `<p>You have a pending outgoing match request. Waiting for response...</p>`;
@@ -161,7 +152,6 @@ async function checkMatchStatus() {
                 break;
             case 'no_match':
             case 'match_expired':
-                console.log(data.status, data.message);
                 currentPartnerId = null;
                 clearPartnerInfo(); //new
                 if (partnerDiaryContent) {
@@ -170,7 +160,6 @@ async function checkMatchStatus() {
                 enableExchangeButton(exchangeBtn);
                 break;
             default:
-                console.log('No active match or default status');
                 currentPartnerId = null;
                 clearPartnerInfo(); //new
                 if (partnerDiaryContent) {
@@ -180,7 +169,6 @@ async function checkMatchStatus() {
                 break;
         }
     } catch (error) {
-        console.error('Error in checkMatchStatus:', error);
         showNotification('Your partner\'s diary is still empty! Maybe they\'re busy exploring a magical world');
         if (partnerDiaryContent) {
             partnerDiaryContent.innerHTML = '<p>Your partner\'s diary is still empty! Maybe they\'re busy exploring a magical world</p>';
@@ -225,12 +213,10 @@ function enableExchangeButton(button) {
 }
 
 function updateExchangeButton(matchData) {
-    console.log('updateExchangeButton called with data:', matchData);
     const exchangeBtn = document.getElementById('exchangeBtn');
     const exchangeCountdown = document.getElementById('exchangeCountdown');
 
     if (!exchangeBtn || !exchangeCountdown) {
-        console.log('Exchange button or countdown element not found on this page');
         return;
     }
 
@@ -289,8 +275,6 @@ function stopCountdown() {
 
 
 async function loadPartnerDiary(partnerId) {
-    console.log(`Attempting to load partner diary for partner ID: ${partnerId}`);
-
     try {
         const token = localStorage.getItem('token');
         const response = await retryOperation(() => 
@@ -308,12 +292,7 @@ async function loadPartnerDiary(partnerId) {
             checkMatchStatus();
             return null; // 返回 null 表示沒有有效的日記內容
         }
-
-        console.log('Response status:', response.status);
-        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-
         const responseText = await response.text();
-        console.log('Response text:', responseText);
 
         let data;
         try {
@@ -324,11 +303,8 @@ async function loadPartnerDiary(partnerId) {
         }
 
         if (!response.ok) {
-            console.error('Server error response:', data);
             throw new Error(data.detail || `HTTP error! status: ${response.status}`);            
         }    
-
-        console.log('Partner diary data:', data);
 
 
         // partnerDiaryContent.innerHTML = ''; // 清空現有內容
@@ -341,11 +317,8 @@ async function loadPartnerDiary(partnerId) {
 
                 </div>
             `).join('');
-            console.log(`Rendered ${data.length} diary entries`);
-
         } else {
             partnerDiaryContent.innerHTML = '<p>Your partner has not written any diaries yet. Check back later!</p>';
-            console.log('No diary entries found for partner');
         }
 
         if (partnerDiaryContent) {
@@ -354,8 +327,6 @@ async function loadPartnerDiary(partnerId) {
 
         return diaryContent; // 返回日記內容，即使是空的
     } catch (error) {
-        console.error('Error loading partner diary:', error);
-        console.error('Error stack:', error.stack);
         const errorMessage = error.message || 'Failed to load partner diary';
         showNotification(`Your partner\'s diary is still empty! Maybe they\'re busy exploring a magical world`);
         
@@ -370,7 +341,6 @@ async function loadPartnerDiary(partnerId) {
 function connectWebSocket() {
     const userId = localStorage.getItem('user_id');
     if (!userId) {
-        console.error('User ID not found. Unable to establish WebSocket connection.');
         return;
     }
 
@@ -430,9 +400,7 @@ async function checkPendingRequests() {
 }
 
 function showMatchRequestNotification(request) {
-    console.log('Showing notification for request:', request);
     if (!request || !request.requester_id) {
-        console.error('Invalid request object:', request);
         return;
     }
     const notification = document.createElement('div');
@@ -448,13 +416,11 @@ function showMatchRequestNotification(request) {
     
     acceptBtn.addEventListener('click', function() {
         const requesterId = this.getAttribute('data-requester-id');
-        console.log('Rejecting request from requester:', requesterId);
         respondToMatchRequest(requesterId, 'accept');
     });
 
     rejectBtn.addEventListener('click', function() {
         const requesterId = this.getAttribute('data-requester-id');
-        console.log('Rejecting request from requester:', requesterId);
         respondToMatchRequest(requesterId, 'reject');
     });
 
@@ -463,7 +429,6 @@ function showMatchRequestNotification(request) {
 }
 
 async function respondToMatchRequest(requesterId, action) {
-    console.log(`Responding to request from user ${requesterId} with action ${action}`);
     try {
         const token = localStorage.getItem('token');
         const response = await fetch(`/matching/respond/${requesterId}`, {
@@ -480,7 +445,6 @@ async function respondToMatchRequest(requesterId, action) {
         }
 
         const data = await response.json();
-        console.log('Response data:', data);
         showNotification(data.message);
          // 關閉 WebSocket 連接
         if (window.matchWebSocket) {
@@ -500,7 +464,6 @@ async function respondToMatchRequest(requesterId, action) {
             await checkMatchStatus();
         }
     } catch (error) {
-        console.error('Error:', error);
         showNotification('MATCH SYSTEM ERROR, PLEASE TRY AGAIN LATER');
     }
 }
@@ -605,7 +568,6 @@ async function saveSelfIntro() {
             showMessage(document.querySelector('.fail-self-info'), 'Failed to save self introduction. Please try again later.');
         }
     } catch (error) {
-        console.error('Error saving self introduction:', error);
         showMessage(document.querySelector('.fail-self-info'), 'An error occurred while saving. Please try again.');
     }
 }
@@ -634,16 +596,12 @@ async function loadUserAvatar(targetUserId = null) {
         }
 
         const userData = await response.json();
-        console.log('Received user data:', userData);
-
         if (userData && userData.avatar_url) {
             return userData.avatar_url;
         } else {
-            console.log('No avatar URL found in the response');
             return null;
         }
     } catch (error) {
-        console.error('Error loading user avatar:', error);
         return null;
     }
 }
@@ -700,7 +658,6 @@ async function fetchPartnerInfo(partnerId) {
         const data = await response.json();
         updatePartnerModalContent(data);
     } catch (error) {
-        console.error('獲取夥伴資料時發生錯誤:', error);
         showNotification('There is no partner INFO.');
     }
 }
@@ -941,7 +898,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             })
             .catch(error => {
                 showMessage(failMessage, 'An error occurred, please try again later');
-                console.log('Error', error);
             });
         } else {
             console.log('Email or password input not found');
@@ -972,7 +928,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const successSignupMessage = document.querySelector('.success-signup');
 
         if (!signupnameInput || !signupemailInput || !signuppasswordInput) {
-            console.log('Some signup inputs are missing');
             return;
         }
 
@@ -981,7 +936,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const password = signuppasswordInput.value.trim();
 
         if (!name || !email || !password) {
-            console.log('Some fields are empty');
             return;
         }
 
@@ -1006,7 +960,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         })
         .catch(error => {
             showMessage(failRegisted, 'An error occurred, please try again later');
-            console.log('Error', error.message);
         });
     }
 
@@ -1135,12 +1088,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (timeElapsed < SAVE_COOLDOWN) {
             const remainingTime = Math.ceil((SAVE_COOLDOWN - timeElapsed) / 1000);
-            console.log('Cooldown active, remaining time:', remainingTime);
             showMessage(document.querySelector('.fail-message'), `Please wait ${remainingTime} seconds before saving again.`);
             return;
         }
-
-        console.log('Proceeding with save operation');
 
         // 如果通過冷卻檢查，禁用按鈕
         saveDiaryBtn.disabled = true;
@@ -1179,7 +1129,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             weather: currentWeather || null,  // 如果未設置，使用 null
             note: content
         };
-        console.log('Saving mood data:', JSON.stringify(moodData, null, 2));
 
         const diaryData = {
             title: "Diary Entry",
@@ -1237,7 +1186,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         })
         .catch(error => {
-            console.error('Error:', error);
             showMessage(document.querySelector('.fail-message'), 'An error occurred. Please try again later.');
         })
         .finally(() => {
@@ -1255,7 +1203,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (timeElapsed < SAVE_COOLDOWN) {
             const remainingTime = Math.ceil((SAVE_COOLDOWN - timeElapsed) / 1000);
-            console.log('Cooldown active, remaining time:', remainingTime);
             showMessage(document.querySelector('.fail-message'), `Please wait ${remainingTime} seconds before saving again.`);
             return;
         }
@@ -1317,7 +1264,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             showMessage(document.querySelector('.success-message'),'Post to public sucessfully');
             lastSubmitTime = now;
         } catch (error) {
-            console.error('發佈錯誤:', error);
             showMessage(document.querySelector('.fail-message'), 'To-Public Failed, Please try again later');
         } finally {
             setTimeout(() => {
@@ -1329,7 +1275,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // 在頁面加載時初始化日曆
     if (isDiaryPage) {
-        console.log('Attempting to generate calendar');
         const currentDate = new Date();
         currentYear = currentDate.getFullYear();
         currentMonth = currentDate.getMonth() + 1; // 注意：getMonth() 返回 0-11
@@ -1414,14 +1359,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     resetMoodUI();
                 }
             }
-            updateUIElements();
         })
         .catch(error => {
-            console.error('Error loading diary entry:', error);
             showMessage(document.querySelector('.fail-message'), 'Failed to load diary content');
             handleEmptyDiary(param);
             resetMoodUI();
-            updateUIElements();
         });
     }
     
@@ -1453,57 +1395,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         isEditing = true; 
     }
 
-    async function updateUIElements() {
-        console.log('Updating UI elements...');
-        console.log('Diary content:', diaryContent.value);
-        console.log('Selected date:', selectedDateElement ? selectedDateElement.textContent : 'N/A');
-        console.log('Current entry ID:', currentEntryId);
-        console.log('Save button text:', saveDiaryBtn ? saveDiaryBtn.textContent : 'N/A');
-        console.log('Delete button visibility:', deleteDiaryBtn ? deleteDiaryBtn.style.display : 'N/A');
-    }
 
     function loadMoodData(date) {
         const token = localStorage.getItem('token');
         if (!token) {
-            console.log('No token found, mood data not loaded');
             return;
         }
-        console.log('Fetching mood data for date:', date);  // 新增
-
         fetch(`/api/v1/diary_entries/${date}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
         })
         .then(response => {
-            console.log('Response status:', response.status);  // 新增
-
             if (!response.ok) {
                 if (response.status === 404) {
-                    console.log('Mood data not found for date:', date);  // 新增
-
-                    return null;  // 沒有找到心情數據
+                    return null;
                 }
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             return response.json();
         })
         .then(data => {
-            console.log('Received mood data:', data);  // 新增
-
             if (data && data.length > 0 && data[0].mood_data) {
                 currentMoodScore = data[0].mood_data.mood_score || 0;
                 currentWeather = data[0].mood_data.weather || '';
     
                 updateMoodUI();
             } else {
-                console.log('Resetting mood UI due to invalid data');  // 新增
-
                 resetMoodUI();
             }
         })
         .catch(error => {
-            console.error('Error loading mood data:', error);
             resetMoodUI();
         });
     }
@@ -1562,22 +1484,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // 格式化日期字符串
         const formattedDate = `${year}-${month}-${day}`;
-        
-        console.log('Selected date:', date);
-        console.log('Formatted date for API:', formattedDate);
-        
         return formattedDate;
         }
     
         
     function generateCalendar(year, month) {
         if (year === undefined || month === undefined) {
-            console.error('Invalid year or month:', year, month);
             return;
         }
         const calendarWall = document.querySelector('.calendar-wall');
         if (!calendarWall) {
-            console.error('Calendar wall element not found');
             return;
         }
         calendarWall.innerHTML = '';
@@ -1624,7 +1540,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function updateCalendar(year, month) {
         const token = localStorage.getItem('token');
         if (!token) {
-            console.log('未找到 token，日曆未更新');
             return;
         }
     
@@ -1666,7 +1581,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function loadRecentDiaries() {
         const token = localStorage.getItem('token');
         if (!token) {
-            console.log('No token found, recent diaries not loaded');
             return;
         }
 
@@ -1682,7 +1596,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             return response.json();
         })
         .then(entries => {
-            console.log('Received entries:', entries);
             recentDiariesContainer.innerHTML = ''; // 清空現有內容
             entries.slice(0, 5).forEach(entry => { // 只顯示最近5篇
                 const entryElement = document.createElement('div');
@@ -1740,8 +1653,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             lastDeleteTime = now; // 更新最後刪除時間
 
             try {
-                console.log('Sending delete request for entry ID:', entryId);
-
                 const response = await fetch(`/api/v1/diary_entries/${entryId}`, {
                     method: 'DELETE',
                     headers: {
@@ -1766,17 +1677,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     saveDiaryBtn.textContent = 'SAVE';
                     currentEntryId = null; // 重要：重置 currentEntryId
 
-                    updateUIElements();
                     }
             } catch (error) {
-                console.error('Error in delete operation:', error);
                 showMessage(document.querySelector('.fail-message'), 'AN ERROR OCCURRED, PLEASE TRY AGAIN LATER');
             } finally {
-                console.log('Re-enabling delete buttons after cooldown');
-                // 5秒後重新啟用所有刪除按鈕
                 setTimeout(() => {
                     deleteButtons.forEach(button => button.disabled = false);
-                    console.log('Delete buttons re-enabled');
                 }, DELETE_COOLDOWN);
             }
         } else {
@@ -1791,7 +1697,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     } // 只在 diary.html 頁面執行的代碼尾部=========================
 
     function showMessage(element, message, delay = 0) {
-        console.log('Showing message:', message); // 添加日誌
         setTimeout(() => {
             if (element) {
                 const translations = {
@@ -1800,10 +1705,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
                 element.textContent = translations[message] || message;
                 element.style.display = 'block';
-                console.log('Message displayed:', element.textContent); // 添加日誌
                 setTimeout(() => {
                     element.style.display = 'none';
-                    console.log('Message hidden'); // 添加日誌
                 }, 3000);
             } else {
                 console.error('Message element not found:', message);
@@ -1999,7 +1902,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 avatarUrl = cloudfront_url;
             } catch (error) {
-                console.error('Error uploading avatar:', error);
                 showMessage(document.querySelector('.fail-self-info'), 'Upload avatar failed');
                 submitButton.disabled = false;
                 return;
@@ -2041,7 +1943,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const result = await response.json();
             
             if (!response.ok) {
-                console.error('Update failed:', result.message);
                 showMessage(document.querySelector('.fail-self-info'), result.message || 'Update profile failed');
 
                 if (result.message.includes("password")) {
@@ -2053,13 +1954,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             
             if (result.success) {
-                console.log('Update successful, received result:', result);
-
                 localStorage.setItem('selfIntro', selfIntro);
                 showMessage(document.querySelector('.success-self-info'), 'Update profile successfully');
 
                 if (result.avatar_url) {
-                    console.log('Attempting to update avatar with URL:', result.avatar_url);
                     const userAvatar = document.getElementById('userAvatar');
                     const avatarPreview = document.getElementById('avatar-preview');
                     if (userAvatar) {
@@ -2075,12 +1973,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 // localStorage.setItem('selfIntro', selfIntro);
             } else {
-                console.error('Update failed:', result.message);
                 showMessage(document.querySelector('.fail-self-info'), result.message || 'Update profile failed');
             }
 
         } catch (error) {
-            console.error('Error updating profile:', error);
             showMessage(document.querySelector('.fail-self-info'), error.message || 'Update profile failed');
         } finally {
             submitButton.disabled = false;

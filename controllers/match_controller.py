@@ -215,7 +215,6 @@ async def respond_to_matching_request(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: pooling.PooledMySQLConnection = Depends(get_db)
 ):
-    logger.debug(f"開始處理用戶 {requester_id} 的配對回應")
     if response.action not in ['accept', 'reject']:
         raise HTTPException(status_code=400, detail="無效的操作")
 
@@ -266,16 +265,15 @@ async def respond_to_matching_request(
                     VALUES (%s, %s, CURDATE(), 'accepted'),
                            (%s, %s, CURDATE(), 'accepted')
                 """, (current_user['id'], requester_id, requester_id, current_user['id']))
-                cursor.fetchone()  # 讀取空結果集
+                cursor.fetchone()
 
             else:  # reject
-                logger.debug("處理拒絕操作")
                 cursor.execute("""
                     UPDATE users 
                     SET is_matching = 0 
                     WHERE id IN (%s, %s)
                 """, (requester_id, current_user['id']))
-                cursor.fetchone()  # 讀取空結果集
+                cursor.fetchone()
 
                 cursor.execute("""
                     INSERT INTO user_matches 
@@ -293,7 +291,6 @@ async def respond_to_matching_request(
             cursor.fetchone()  # 讀取空結果集
 
         db.commit()
-        logger.debug("任務提交成功")
 
         # 清除相關的快取
         await redis_client.delete(f"match_status:{current_user['id']}")
@@ -302,11 +299,9 @@ async def respond_to_matching_request(
         return {"message": f"Scucessfully {response.action}ed the match request"}
 
     except mysql.connector.Error as e:
-        logger.error(f"數據庫錯誤: {str(e)}", exc_info=True)
         db.rollback()
         raise HTTPException(status_code=500, detail=f"處理請求時發生數據庫錯誤: {str(e)}")
     except Exception as e:
-        logger.error(f"未知錯誤: {str(e)}", exc_info=True)
         db.rollback()
         raise HTTPException(status_code=500, detail=f"處理請求時發生未知錯誤: {str(e)}")
     finally:
@@ -397,7 +392,6 @@ async def request_exchange(
         await redis_client.delete(f"match_status:{current_user['id']}")
         await redis_client.delete(f"match_status:{partner['id']}")
 
-        logger.debug(f"SUCCESS request_exchange")
         return {
                     "message": "Your match request is on its way!",
                     "status": "success",
@@ -406,11 +400,9 @@ async def request_exchange(
                 }        
     except mysql.connector.Error as e:
         db.rollback()
-        logger.error(f"Database error in request_exchange: {str(e)}")
         raise HTTPException(status_code=500, detail="資料庫錯誤，請稍後再試")
     except Exception as e:
         db.rollback()
-        logger.error(f"Database error in request_exchange: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
@@ -576,8 +568,6 @@ async def get_partner_diary(
     print(f"Cache miss: {cache_key}")  # 調試信息
 
     try:
-        logger.debug(f"Attempting to get partner diary for partner_id: {partner_id}, current_user: {current_user['id']}")
-
         cursor = db.cursor(dictionary=True)
 
         # 步驟 1: 獲取當前用戶的活躍匹配
@@ -630,7 +620,6 @@ async def get_partner_diary(
     except HTTPException as http_ex:
         raise http_ex
     except Exception as e:
-        logger.error(f"Unexpected error occurred: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
     finally:
         cursor.close()
@@ -680,7 +669,6 @@ async def get_partner_info(
     except HTTPException as http_ex:
         raise http_ex
     except Exception as e:
-        logger.error(f"獲取夥伴資料時發生錯誤: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"獲取夥伴資料時發生錯誤: {str(e)}")
     finally:
         cursor.close()

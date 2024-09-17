@@ -61,8 +61,6 @@ async def get_presigned_url(request: PresigneUrlRequest):
 @router.post("/api/v1/messages")
 async def save_message(request: MessageRequest, current_user: dict = Depends(get_current_user)):
     try:
-        logger.info(f"Received message request: {request}")
-
         if not request.text.strip() and not request.imageUrl:
             raise HTTPException(status_code=400, detail="Message must contain text or image")
 
@@ -77,14 +75,12 @@ async def save_message(request: MessageRequest, current_user: dict = Depends(get
         INSERT INTO messages(text, imageUrl, email)
         VALUES (%s, %s, %s)
         """
-        logger.info(f"Executing query: {insert_query} with params: {(request.text, request.imageUrl, email)}")
 
         cursor.execute(insert_query, (request.text, request.imageUrl, email))
         conn.commit()
 
         # 獲取插入的消息ID
         message_id = cursor.lastrowid
-        logger.info(f"Inserted message with ID: {message_id}")
 
         # 獲取插入的消息
         select_query = "SELECT * FROM messages WHERE id = %s"
@@ -101,14 +97,11 @@ async def save_message(request: MessageRequest, current_user: dict = Depends(get
             email=email,
             created_at=datetime.now().isoformat()
         )
-        logger.info(f"Returning response: {response}")
         return response.dict()  # 返回字典形式的響應
 
     except mysql.connector.Error as db_error:
-        logger.error(f"Database error: {db_error}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(db_error)}")
     except Exception as e:
-        logger.error(f"Unexpected error in save_message: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 @router.delete("/api/v1/messages/{message_id}")
@@ -132,7 +125,6 @@ async def delete_message(message_id: int, current_user: Dict = Depends(get_curre
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Message not found or already deleted")
         
-        logger.info(f"Successfully deleted message {message_id}")
         return {"message": "Message deleted successfully"}
     except mysql.connector.Error as db_error:
         raise HTTPException(status_code=500, detail=f"Database error: {str(db_error)}")

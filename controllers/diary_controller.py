@@ -95,10 +95,8 @@ async def get_diary_entries(
             return json.loads(cached_entries)
 
     except mysql.connector.Error as e:
-        logger.error(f"Database error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"資料庫錯誤: {str(e)}")
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"發生意外錯誤: {str(e)}")
     finally:
         if cursor:
@@ -278,11 +276,7 @@ async def get_diary_entry(
 
             response = DiaryEntryResponse(**entry)
 
-            logger.debug(f"Setting cache for key: {cache_key}")
             await redis_client.set(cache_key, json.dumps(response.dict()), ex=3600)
-            logger.debug(f"Cache set for key: {cache_key}")
-
-            logger.debug(f"Processed entry: {entry}")
             return response
         
         except ValueError:
@@ -315,13 +309,11 @@ async def get_diary_entry(
             ORDER BY 
                 diary_entries.date DESC
             """
-            logger.debug(f"Parameters: {current_user['id']}, {query_date}")
             
             cursor.execute(query, (current_user["id"], query_date))
             entries = cursor.fetchall()
             
             if not entries:
-                logger.info(f"No entries found for date: {param}")
                 return []
             
             for entry in entries:
@@ -334,18 +326,12 @@ async def get_diary_entry(
 
             response = [DiaryEntryResponse(**entry) for entry in entries]
 
-            logger.debug(f"Setting cache for key: {cache_key}")
             await redis_client.set(cache_key, json.dumps([entry.dict() for entry in response]), ex=3600)
-            logger.debug(f"Cache set for key: {cache_key}")
-
-            logger.debug(f"Returning entries: {entries}")
             return response
         
     except mysql.connector.Error as e:
-        logger.error(f"Database error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"資料庫錯誤: {str(e)}")
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"發生意外錯誤: {str(e)}")
     finally:
         if cursor:
@@ -374,7 +360,6 @@ async def create_diary_entry(
     current_user: Dict = Depends(get_current_user),
     db: mysql.connector.connection.MySQLConnection = Depends(get_db)
 ):
-    logger.debug(f"Received entry data: {entry.dict()}")
     cursor = None
     try:
         cursor = db.cursor(dictionary=True)
@@ -400,18 +385,14 @@ async def create_diary_entry(
         INSERT INTO diary_entries(user_id, title, content, date, is_public, image_url)
         VALUES (%s, %s, %s, %s, %s, %s)
         """
-        logger.debug(f"Inserting entry with date: {entry_date}")
-        logger.debug(f"Parameters: {current_user['id']}, {entry.title}, {entry.content}, {entry_date}, {entry.is_public}, {entry.image_url}")
 
         cursor.execute(query, (current_user["id"], entry.title, entry.content, entry_date,
                                 entry.is_public, entry.image_url))
         db.commit()
         new_id = cursor.lastrowid
-        logger.debug(f"New entry ID: {new_id}")
 
         cursor.execute("SELECT * FROM diary_entries WHERE id = %s", (new_id,))
         new_entry = cursor.fetchone()
-        logger.debug(f"Fetched new entry: {new_entry}")
 
         if new_entry:
             # 轉換日期時間字段
@@ -420,7 +401,6 @@ async def create_diary_entry(
             new_entry['updated_at'] = datetime.now().isoformat()
             
             response = DiaryEntryResponse(**new_entry)
-            logger.debug(f"Created DiaryEntryResponse: {response}")
 
             # 清除日記列表的快取
             await redis_client.delete(f"diary_entries:{current_user['id']}:*")
@@ -430,10 +410,8 @@ async def create_diary_entry(
         else:
             raise HTTPException(status_code=404, detail="新創建的條目無法找到")
     except mysql.connector.Error as e:
-        logger.error(f"Database error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"資料庫錯誤: {str(e)}")
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"發生意外錯誤: {str(e)}")
     finally:
         if cursor:
@@ -446,8 +424,6 @@ async def update_diary_entry(
     current_user: Dict = Depends(get_current_user),
     db: mysql.connector.connection.MySQLConnection = Depends(get_db)
 ):
-    logger.debug(f"Received update request for entry ID: {entry_id}")
-    logger.debug(f"Update data: {entry.dict()}")
     cursor = None
     try:
         cursor = db.cursor(dictionary=True)
@@ -480,9 +456,6 @@ async def update_diary_entry(
         """
         params = (entry.title, entry.content, entry_date, entry.is_public, entry.image_url, now_iso, entry_id, current_user["id"])
 
-        logger.debug(f"Executing query: {update_query}")
-        logger.debug(f"Parameters: {params}")
-
         cursor.execute(update_query, params)
         db.commit()
 
@@ -499,7 +472,6 @@ async def update_diary_entry(
             updated_entry['updated_at'] = datetime.now().isoformat()
 
             response = DiaryEntryResponse(**updated_entry)
-            logger.debug(f"Updated DiaryEntryResponse: {response}")
 
             # 清除相關快取
             await redis_client.delete(f"diary_entries:{current_user['id']}:*")
@@ -510,10 +482,8 @@ async def update_diary_entry(
             raise HTTPException(status_code=404, detail="更新後的條目無法找到")
 
     except mysql.connector.Error as e:
-        logger.error(f"Database error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"資料庫錯誤: {str(e)}")
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"發生意外錯誤: {str(e)}")
     finally:
         if cursor:
@@ -557,14 +527,11 @@ async def delete_diary_entry(
             if matching_keys:
                 await redis_client.delete(*matching_keys)
 
-        logger.info(f"Deleted diary entry {entry_id} and cleared related caches for user {current_user['id']}")
         return {"message": "日記條目已成功刪除，相關緩存已清理"}
         
     except mysql.connector.Error as e:
-        logger.error(f"Database error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"資料庫錯誤: {str(e)}")
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"發生意外錯誤: {str(e)}")
     finally:
         if cursor:
@@ -576,11 +543,8 @@ async def save_mood_entry(
     current_user: dict = Depends(get_current_user),
     db: mysql.connector.connection.MySQLConnection = Depends(get_db)
 ):
-    logger.debug(f"Received mood entry: {mood_entry.dict()}")
 
-     # 新增的驗證代碼
     if mood_entry.mood_score is not None and (mood_entry.mood_score < 1 or mood_entry.mood_score > 5):
-        logger.warning(f"Invalid mood score received: {mood_entry.mood_score}")
         raise HTTPException(status_code=400, detail="Mood score must be between 1 and 5")
 
     try:
@@ -643,10 +607,8 @@ async def save_mood_entry(
             raise HTTPException(status_code=404, detail="無法檢索保存的心情記錄")
 
     except mysql.connector.Error as e:
-        logger.error(f"Database error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"資料庫錯誤: {str(e)}")
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"發生意外錯誤: {str(e)}")
     finally:
         if cursor:
@@ -677,17 +639,14 @@ async def update_profile(
 
         if request.new_password and request.new_password.strip():
             if not request.current_password:
-                logger.warning(f"Attempt to change password without providing current password for user {current_user['id']}")                
                 raise HTTPException(status_code=400, detail="當前密碼必須提供")
 
             cursor.execute("SELECT password FROM users WHERE id = %s", (current_user['id'],))
             user = cursor.fetchone()
             if not user:
-                logger.error(f"User not found in database: {current_user['id']}")
                 raise HTTPException(status_code=404, detail="用戶不存在")
             
             if request.current_password != user['password']:
-                logger.warning(f"Incorrect current password provided for user {current_user['id']}")
                 raise HTTPException(status_code=400, detail="Current password not match!")
             
             update_fields.append("password = %s")
@@ -716,7 +675,6 @@ async def update_profile(
             }
             await redis_client.set(cache_key, json.dumps(cache_data), ex=3600)  # 設置1小時過期
             
-            logger.info(f"User {current_user['id']} updated profile successfully")
             return JSONResponse(content={
                 'success': True, 
                 'message': 'Profile updated successfully',
@@ -724,17 +682,13 @@ async def update_profile(
                 'self_intro': updated_user['self_intro']
             })
         else:
-            logger.info(f"No updates for user {current_user['id']}")
             return JSONResponse(content={'success': True, 'message': '沒有需要更新的資料'})
 
     except mysql.connector.Error as e:
-        logger.error(f"Database error for user {current_user['id']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"資料庫錯誤: {str(e)}")
     except HTTPException as he:
-        logger.warning(f"HTTP exception in update_profile: {he.detail}")
         return JSONResponse(status_code=he.status_code, content={"message": he.detail})        
     except Exception as e:
-        logger.error(f"Unexpected error for user {current_user['id']}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"發生意外錯誤: {str(e)}")
     finally:
         if cursor:
