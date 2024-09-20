@@ -579,8 +579,12 @@ a {
     border-radius: 50%;
 }
 
+.test-account-hint {
+    color: #20aea9; 
+    font-size: 0.9em;
+}
 
-/* 新增媒體查詢 */
+
 @media (max-width: 1100px) {
     .navbar, .nav-content, .main-content, footer {
         width: 100%;

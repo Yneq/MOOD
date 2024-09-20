@@ -361,6 +361,23 @@ document.getElementById('imageInput').addEventListener('change', function() {
 function showLoginModal() {
     modal_login.style.display = "block";
     overlay.style.display = "block";
+
+    const loginEmailInput = document.querySelector('input[name="login-email"]');
+    const loginPasswordInput = document.querySelector('input[name="login-password"]');
+    const testAccountHint = document.querySelector('.test-account-hint');
+
+    if (loginEmailInput && loginPasswordInput) {
+        loginEmailInput.value = 'test@test.com';
+        loginPasswordInput.value = 'test';
+
+        if (testAccountHint) {
+            testAccountHint.style.display = 'block';
+
+            setTimeout(() =>{
+                testAccountHint.style.display = 'none'
+            }, 3000)
+        }
+    }
 }
 
 const modal_login = document.getElementById('modal-login');
@@ -389,9 +406,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         moodsExchangeBtn.addEventListener('click', function(e) {
             e.preventDefault();
             if (isLoggedIn) {
-                window.location.href = '/static/match.html'; // 已登入，跳轉到 diary.html
+                window.location.href = '/static/match.html';
             } else {
                 showLoginModal(); // 未登入，顯示登入框
+            }
+        });
+    }
+
+    const startMyMoodsBtn = document.getElementById('startMyMoodsBtn');
+    if (startMyMoodsBtn) {
+        startMyMoodsBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (isLoggedIn) {
+                window.location.href = '/static/diary.html';
+            } else {
+                showLoginModal();
             }
         });
     }

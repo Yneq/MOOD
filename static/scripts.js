@@ -814,7 +814,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     function showLoginModal() {
         modal_login.style.display = "block";
         overlay.style.display = "block";
-        
+
+        const loginEmailInput = document.querySelector('input[name="login-email"]');
+        const loginPasswordInput = document.querySelector('input[name="login-password"]');
+        const testAccountHint = document.querySelector('.test-account-hint');
+
+        if (loginEmailInput && loginPasswordInput) {
+            loginEmailInput.value = 'test@test.com';
+            loginPasswordInput.value = 'test';
+
+            if (testAccountHint) {
+                testAccountHint.style.display = 'block';
+
+                setTimeout(() =>{
+                    testAccountHint.style.display = 'none'
+                }, 3000)
+            }
+        }
     }
 
     closeBtn.forEach(btn => {

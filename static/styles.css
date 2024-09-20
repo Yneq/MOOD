@@ -548,6 +548,11 @@ textarea {
   color: rgb(11, 164, 95);
 }
 
+.test-account-hint {
+  color: #20aea9; 
+  font-size: 0.9em;
+}
+
 @media (max-width: 1100px) {
 
   .diary-main-content {
