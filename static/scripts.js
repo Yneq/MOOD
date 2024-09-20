@@ -1274,7 +1274,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
     
-            const response = await fetch('/save_message', {
+            const response = await fetch('/api/v1/messages', {
                 method: 'POST',
                 body: JSON.stringify({ text, imageUrl }),
                 headers: {
