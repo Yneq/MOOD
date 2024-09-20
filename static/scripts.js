@@ -111,11 +111,21 @@ async function checkMatchStatus() {
                 }
                 
                 if (partnerNameElement) {
-                    const partnerAvatarUrl = await loadUserAvatar(data.partner_id);
+                    const updatePartnerAvatar = async () => {
+                        const partnerAvatarUrl = await loadUserAvatar(data.partner_id);
+                        if (partnerAvatarUrl) {
+                            partnerNameElement.style.backgroundImage = `url('${partnerAvatarUrl}')`;
+                            partnerNameElement.textContent = '';
+                        } else {
+                            partnerNameElement.style.backgroundImage = '';
+                            partnerNameElement.textContent = data.partner_name.charAt(0).toUpperCase();
+                        }
+                        partnerNameElement.style.display = 'flex';
+                    };
 
-                    partnerNameElement.style.backgroundImage = partnerAvatarUrl ? `url('${partnerAvatarUrl}')` : '';
-                    partnerNameElement.textContent = partnerAvatarUrl ? '' : data.partner_name.charAt(0).toUpperCase();
-                    partnerNameElement.style.display = 'flex';
+                    await updatePartnerAvatar();
+                    // 如果第一次加載失敗,5秒後重試一次
+                    setTimeout(updatePartnerAvatar, 5000);
 
                     const tooltip = document.getElementById('partnerNameTooltip');
                     if (tooltip) {
