@@ -325,11 +325,6 @@ margin-left: 10px;
     border-color: transparent #555 transparent transparent;
 }
 
-/* .partner-name:hover + .tooltip {
-    visibility: visible;
-    opacity: 1;
-} */
-
 .partnerdiary-entry {
     background: rgba(128, 128, 128, 0.3);
     backdrop-filter: blur(45px);
@@ -375,12 +370,6 @@ margin-left: 10px;
     gap: 20px;
 }
 
-/* .partnerdiary-content {
-    width: 100%;
-    max-width: 1200px;
-    display: flex;
-    padding: 10px;
-} */
 
 #selectedDiaryContent {
     background: rgba(255, 255, 255, 0.1);
@@ -886,8 +875,8 @@ box-shadow: 0 0 20px rgba(0, 255, 255, 0.2), 0 0 20px rgba(238, 130, 238, 0.2);
     }
 
     .partner-name {
-        width: 2rem;
-        height: 2rem;
+        width: auto;
+        padding: 0 15px;
         font-size: 0.75rem;
         margin-left: 0.625rem;
         border: 1px solid #ffffff;
