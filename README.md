@@ -86,8 +86,8 @@ Mood Exchange Diary is a platform that allows users to write and exchange diarie
    - Containerized with Docker for easy deployment and scaling
 5. **Database**: AWS RDS (MySQL) for data storage
 6. **Content Delivery**: AWS CloudFront CDN for global content delivery, with static assets stored in Amazon S3
-<img width="659" alt="Screenshot 2024-08-19 at 9 06 58 PM" src="https://github.com/user-attachments/assets/4dab0f0c-dcfa-4a1b-981d-77c4bc7dc589">
 
+<img width="681" alt="Screenshot 2024-09-18 at 7 26 02 PM" src="https://github.com/user-attachments/assets/79abe1e7-c481-447f-9763-1df62a184547">
 
 ## Database Schema
 
